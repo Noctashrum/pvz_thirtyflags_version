@@ -989,7 +989,8 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
     theBoard->mZombieHealthToNextWave = -1;
     theBoard->mZombieHealthWaveStart = 0;
 
-    // ThirtyFlags v5: save progress on every flag change
+    // ThirtyFlags v5: save progress on every flag change (board snapshot included)
+    gTFSaveBoard = theBoard;
     ThirtyFlagsSaveProgress();
 }
 
