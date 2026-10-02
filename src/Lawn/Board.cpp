@@ -2734,6 +2734,21 @@ bool Board::CanAddBobSled()
 //0x40DDC0
 Zombie* Board::AddZombieInRow(ZombieType theZombieType, int theRow, int theFromWave)
 {
+	// 【三十旗·叠种/黑幕】单点兜底：所有僵尸生成路径（含舞王、墓碑升起、巨人扔小鬼等
+	// 不走 PickRowForNewZombie 的路径）刷到未解锁行时，重定向到第一个已解锁行。
+	// 之前只在 PickRowForNewZombie 过滤，绕过路径（如舞王）仍会刷进黑幕行。
+	if (ThirtyFlagsMode() && !gThirtyFlags.IsRowUnlocked(theRow))
+	{
+		for (int aFallback = 0; aFallback < MAX_GRID_SIZE_Y; aFallback++)
+		{
+			if (gThirtyFlags.IsRowUnlocked(aFallback))
+			{
+				theRow = aFallback;
+				break;
+			}
+		}
+	}
+
 	if (mZombies.mSize >= mZombies.mMaxSize - 1)
 	{
 		TodTrace("Too many zombies!!");

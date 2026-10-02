@@ -2323,7 +2323,10 @@ void Zombie::UpdateZombieGargantuar()
     if (mHasObject && mBodyHealth < mBodyMaxHealth / 2 && aThrowingDistance > 40.0f)
     {
         mZombiePhase = ZombiePhase::PHASE_GARGANTUAR_THROWING;
-        PlayZombieReanim("anim_throw", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 20, 24.0f);
+        // 【三十旗·平衡】巨人扔小鬼前摇拉长：举起动画速率 24 -> 8（前摇时长 ×3），
+        // 给玩家反制窗口（原版前摇极短，小鬼直接进家无法反制）
+        PlayZombieReanim("anim_throw", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 20,
+            ThirtyFlagsMode() ? 8.0f : 24.0f);
         return;
     }
 

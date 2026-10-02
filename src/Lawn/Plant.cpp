@@ -1570,8 +1570,32 @@ void Plant::UpdateTorchwood()
             // 火球加进白名单后会在范围内停留 20+ 帧，不拦的话 roll 每帧执行、
             // GIANT 的额外伤害会叠加几十次（用户指出的“同一个树桩生成+roll”）。
             // 不同树桩（mPlantCol 不同）仍会正常触发。
-            if (aProjectile->mHitTorchwoodGridX == mPlantCol)
-                continue;
+                        // 【三十旗·叠种】同格多树桩 = 多个独立触发点：
+            //   第 1 个树桩：豌豆 -> 火球
+            //   第 2..N 个树桩：火球 -> roll 元素（每个树桩各 roll 一次）
+            // mHitTorchwoodGridX 编码 = 格号*100 + 该格已触发次数；触发满 N 个才跳过。
+            int aTorchCountHere = 1;
+            if (ThirtyFlagsMode() && mBoard)
+            {
+                int aCount = 0;
+                Plant* aScanTorch = nullptr;
+                while (mBoard->IteratePlants(aScanTorch))
+                {
+                    if (aScanTorch->mPlantCol == mPlantCol && aScanTorch->mRow == mRow &&
+                        aScanTorch->mSeedType == SeedType::SEED_TORCHWOOD &&
+                        aScanTorch->mPlantHealth > 0)
+                    {
+                        aCount++;
+                    }
+                }
+                if (aCount > 3) aCount = 3;   // 上限 3（防极端堆叠）
+                aTorchCountHere = aCount;
+            }
+            int aPrevEncoded = aProjectile->mHitTorchwoodGridX;
+            int aPrevGrid = aPrevEncoded / 100;
+            int aPrevCount = aPrevEncoded % 100;
+            if (aPrevGrid == mPlantCol && aPrevCount >= aTorchCountHere)
+                continue;   // 该格所有树桩均已触发过
 
             Rect aProjectileRect = aProjectile->GetProjectileRect();
             if (GetRectOverlap(aAttackRect, aProjectileRect) >= 10)
@@ -1626,7 +1650,12 @@ void Plant::UpdateTorchwood()
 
                 if (aProjectile->mElement == TF_ELEM_GIANT)
                 {
-                    aProjectile->mDamage += (TF_TORCH_MULTI_BONUS / 2) * aTorchCount;   // ThirtyFlags: xN (stacked torchwoods) v5: giant fireball +20 (was +80)
+                    aProjectile->mDamage += (TF_TORCH_MULTI_BONUS / 2) * aTorchCount;   // ThirtyFlags: xN (stacked torchwoods)
+                }
+                if (aTorchCount > 1)
+                {
+                    // ThirtyFlags balance v5: stacked torchwood hard buff - fireball total damage xN
+                    aProjectile->mDamage += 20 * (aTorchCount - 1);   // ThirtyFlags: +20 base dmg per extra torchwood
                 }
                 if (aProjectile->mProjectileType == ProjectileType::PROJECTILE_STAR)
                 {
@@ -1634,6 +1663,9 @@ void Plant::UpdateTorchwood()
                 }
 
                 aProjectile->ConvertToFireball(mPlantCol);
+                // 【三十旗·叠种】更新编码：本格触发次数 +1（ConvertToFireball 内部写的是裸格号，这里覆盖为编码）
+                int aNewCount = (aPrevGrid == mPlantCol) ? (aPrevCount + 1) : 1;
+                aProjectile->mHitTorchwoodGridX = mPlantCol * 100 + aNewCount;
             }
         }
     }
