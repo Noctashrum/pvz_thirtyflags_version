@@ -15,6 +15,9 @@
 #include "../TodLib/EffectSystem.h"
 static Board* gTFSaveBoard = nullptr;   // ThirtyFlags: board snapshot for saving plants/sun
 static bool gTFJustLoaded = false;      // ThirtyFlags: suppress autosave right after load (plants not restored yet)
+static bool gTFSavePending = true;    // v5: save not yet restored (bootstrap in SetupBoard)
+static bool gTFSaveRestored = false;  // v5: a save was found and restored
+static int  gTFSavedSun = -1;         // v5: sun value read from save
 static int  gTFDeadCol[64], gTFDeadRow[64], gTFDeadSeed[64];   // NIRVANA: plants lost last flag
 static int  gTFDeadCount = 0;
 static void ThirtyFlagsSaveProgress();
@@ -861,13 +864,7 @@ void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow
 void ThirtyFlagsInitRun(Board* theBoard)
 {
     gThirtyFlags.StartRun();
-
-    // ThirtyFlags v5: restore saved progress (flag + upgrades) and jump straight there
-    if (ThirtyFlagsLoadProgress() && theBoard)
-    {
-        ThirtyFlagsFlagChanged(theBoard);
-    }
-    ThirtyFlagsSetupBoard(theBoard);
+    // v5: 存档恢复已自举到 ThirtyFlagsSetupBoard（见该函数开头）    ThirtyFlagsSetupBoard(theBoard);
 
     // 开局已开放的行直接呈现为草皮，不留滚动动画
     for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
@@ -881,6 +878,9 @@ void ThirtyFlagsInitRun(Board* theBoard)
         for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
         {
             gThirtyFlagsWaterFade[x][y] = gThirtyFlags.IsWaterCell(y, x) ? 100 : 0;
+    // v5: 阳光恢复（TF_STARTING_SUN 赋值在本函数之前执行，此处覆盖才不会被重置）
+    if (gTFSaveRestored && theBoard && gTFSavedSun >= 0)
+        theBoard->mSunMoney = gTFSavedSun;
         }
     }
 }
@@ -888,10 +888,57 @@ void ThirtyFlagsInitRun(Board* theBoard)
 // ----------------------------------------------------------------------------------------------------
 // 场地：按当前旗配置水陆格
 // ----------------------------------------------------------------------------------------------------
+static void TFRestorePlants(Board* theBoard)
+{
+    FILE* f = fopen("thirtyflags_save.ini", "r");
+    if (!f) return;
+    char aLine[128];
+    int aPlantCount = 0;
+    int aCol[64], aRow[64], aSeed[64], aImit[64], aHp[64];
+    int aGot = 0;
+    while (fgets(aLine, sizeof(aLine), f))
+    {
+        int v1;
+        if (sscanf(aLine, "plants=%d", &v1) == 1) aPlantCount = v1;
+        else if (sscanf(aLine, "p %d %d %d %d %d", &aCol[aGot], &aRow[aGot], &aSeed[aGot], &aImit[aGot], &aHp[aGot]) == 5)
+        {
+            if (aGot < 64) aGot++;
+        }
+    }
+    fclose(f);
+    for (int k = 0; k < aGot && k < aPlantCount; k++)
+    {
+        if (aCol[k] < 0 || aCol[k] >= MAX_GRID_SIZE_X || aRow[k] < 0 || aRow[k] >= MAX_GRID_SIZE_Y)
+            continue;
+        if (!gThirtyFlags.IsRowUnlocked(aRow[k]))
+            continue;
+        Plant* aNewPlant = theBoard->AddPlant(aCol[k], aRow[k], (SeedType)aSeed[k], (SeedType)aImit[k]);
+        if (aNewPlant && aHp[k] > 0)
+        {
+            aNewPlant->mPlantHealth = aHp[k];
+            aNewPlant->mPlantMaxHealth = aHp[k];
+        }
+    }
+}
+
 void ThirtyFlagsSetupBoard(Board* theBoard)
 {
     if (!theBoard)
         return;
+    // v5: 自举恢复存档——无论 SetupBoard 由谁调用（InitLevel / 选卡后），第一次都先恢复存档，
+    // 否则选卡后的再次铺场会按重置后的旗次覆盖掉恢复结果。
+    if (gTFSavePending && ThirtyFlagsMode() && theBoard)
+    {
+        gTFSavePending = false;
+        gTFSaveRestored = ThirtyFlagsLoadProgress();
+        if (gTFSaveRestored)
+        {
+            if (theBoard->mChallenge)
+                theBoard->mChallenge->mSurvivalStage = gThirtyFlags.mFlag - 1;
+            TFRestorePlants(theBoard);
+        }
+    }
+
 
     if (!gThirtyFlags.mActive)
     {
@@ -2137,6 +2184,7 @@ static bool ThirtyFlagsLoadProgress()
         int aFlag, aCount, aIdx, aStacks;
         if (sscanf(aLine, "flag=%d", &aFlag) == 1)      { gThirtyFlags.mFlag = aFlag; aFound = true; }
         else if (sscanf(aLine, "upgcount=%d", &aCount) == 1) gThirtyFlags.mUpgradeCount = aCount;
+        else if (sscanf(aLine, "sun=%d", &v1) == 1) gTFSavedSun = v1;
         else if (sscanf(aLine, "u %d %d", &aIdx, &aStacks) == 2)
         {
             if (aIdx >= 0 && aIdx < TF_UPG_COUNT) gThirtyFlags.mUpgradeStacks[aIdx] = aStacks;
