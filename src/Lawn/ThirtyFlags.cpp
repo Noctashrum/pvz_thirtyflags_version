@@ -937,6 +937,32 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
 
     ThirtyFlagsSetupBoard(theBoard);
 
+    // 【三十旗】新解锁行补生成小推车 —— InitLawnMowers 只在关卡开始跑一次，
+    // 之后解锁的行（mPlantRow 从 DIRT 变为可种植）没有推车（用户报 bug）。
+    // 逐行检查：已解锁、可种植、且该行还没有推车 → 补一台。
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
+    {
+        if (!gThirtyFlags.IsRowUnlocked(aRow) || theBoard->mPlantRow[aRow] == PlantRowType::PLANTROW_DIRT)
+            continue;
+
+        bool aHasMower = false;
+        LawnMower* aMowerScan = nullptr;
+        while (theBoard->mLawnMowers.IterateNext(aMowerScan))
+        {
+            if (aMowerScan->mRow == aRow)
+            {
+                aHasMower = true;
+                break;
+            }
+        }
+        if (!aHasMower)
+        {
+            LawnMower* aNewMower = theBoard->mLawnMowers.DataArrayAlloc();
+            aNewMower->LawnMowerInitialize(aRow);
+            aNewMower->mVisible = false;
+        }
+    }
+
     // 整张 180 波表在关卡开始时由 Board::PickZombieWaves 一次建成
     // （每波白名单按该波所属旗次取），换旗只需把「当前波」推进到下一面旗的起点。
     theBoard->mCurrentWave = (gThirtyFlags.mFlag - 1) * TF_WAVES_PER_FLAG;

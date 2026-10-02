@@ -3072,8 +3072,9 @@ PlantingReason Board::CanPlantAt(int theGridX, int theGridY, SeedType theSeedTyp
 	{
 		return PlantingReason::PLANTING_NEEDS_UPGRADE;
 	}
-	else if (theSeedType == SeedType::SEED_CATTAIL && aGridSquare != GridSquareType::GRIDSQUARE_POOL)
+	else if (theSeedType == SeedType::SEED_CATTAIL && aGridSquare != GridSquareType::GRIDSQUARE_POOL && !ThirtyFlagsMode())
 	{
+		// ThirtyFlags: cattail can be planted on land directly (user request)
 		return PlantingReason::PLANTING_NOT_HERE;
 	}
 
