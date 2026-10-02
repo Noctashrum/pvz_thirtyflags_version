@@ -863,6 +863,10 @@ void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow
 
 void ThirtyFlagsInitRun(Board* theBoard)
 {
+    // v5: 每次新开一局都要重新允许恢复存档（否则「重新开始」时门闩已用掉，存档不生效）
+    gTFSavePending = true;
+    gTFSaveRestored = false;
+    gTFSavedSun = -1;
     gThirtyFlags.StartRun();
     // v5: 存档恢复已自举到 ThirtyFlagsSetupBoard（见该函数开头）    ThirtyFlagsSetupBoard(theBoard);
 
@@ -881,6 +885,10 @@ void ThirtyFlagsInitRun(Board* theBoard)
     // v5: 阳光恢复（TF_STARTING_SUN 赋值在本函数之前执行，此处覆盖才不会被重置）
     if (gTFSaveRestored && theBoard && gTFSavedSun >= 0)
         theBoard->mSunMoney = gTFSavedSun;
+
+    // v5: 植物恢复放在这里（关卡初始化完成之后，Board 已完全就绪）
+    if (gTFSaveRestored && theBoard)
+        TFRestorePlants(theBoard);
         }
     }
 }
@@ -935,7 +943,8 @@ void ThirtyFlagsSetupBoard(Board* theBoard)
         {
             if (theBoard->mChallenge)
                 theBoard->mChallenge->mSurvivalStage = gThirtyFlags.mFlag - 1;
-            TFRestorePlants(theBoard);
+            // 植物恢复不在这里做：SetupBoard 可能在 Board 尚未初始化完成时被调用，
+            // 此时 AddPlant 会崩溃。改到 ThirtyFlagsInitRun 末尾（关卡初始化完成后）。
         }
     }
 
