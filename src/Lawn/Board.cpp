@@ -8050,6 +8050,11 @@ void Board::KeyChar(SexyChar theChar)
 	}
 	if ((theChar >= _S('1') && theChar <= _S('9') || theChar == _S('0')) && mSeedBank != nullptr && !mPaused)
 	{
+		// 【三十旗】键盘切卡前：先把光标里的卡放回卡槽（Activate 恢复，不进冷却）——
+		// 修复"选卡未种直接切下一张，上一张永久进入冷却"的 bug（原版鼠标靠右键取消，键盘路径漏了这步）
+		if (mCursorObject->mCursorType == CursorType::CURSOR_TYPE_PLANT_FROM_BANK)
+			RefreshSeedPacketFromCursor();
+
 		// 【三十旗】0 = 第 10 号卡槽
 		int aIdx = (theChar == _S('0')) ? 9 : (int)(theChar - _S('1'));
 		if (aIdx < mSeedBank->mNumPackets)
