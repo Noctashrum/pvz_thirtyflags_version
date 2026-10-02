@@ -15,6 +15,8 @@
 #include "../TodLib/EffectSystem.h"
 static Board* gTFSaveBoard = nullptr;   // ThirtyFlags: board snapshot for saving plants/sun
 static bool gTFJustLoaded = false;      // ThirtyFlags: suppress autosave right after load (plants not restored yet)
+static int  gTFDeadCol[64], gTFDeadRow[64], gTFDeadSeed[64];   // NIRVANA: plants lost last flag
+static int  gTFDeadCount = 0;
 static void ThirtyFlagsSaveProgress();
 static bool ThirtyFlagsLoadProgress();
 
@@ -991,6 +993,23 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
     theBoard->mZombieHealthToNextWave = -1;
     theBoard->mZombieHealthWaveStart = 0;
 
+    // 【三十旗·涅槃】本旗开始：复活上一旗阵亡的植物
+    if (gThirtyFlags.GetStacks(TF_UPG_NIRVANA) > 0 && gTFDeadCount > 0)
+    {
+        for (int k = 0; k < gTFDeadCount; k++)
+        {
+            int aCol = gTFDeadCol[k], aRow = gTFDeadRow[k];
+            if (aCol < 0 || aCol >= MAX_GRID_SIZE_X || aRow < 0 || aRow >= MAX_GRID_SIZE_Y)
+                continue;
+            if (!gThirtyFlags.IsRowUnlocked(aRow))
+                continue;
+            if (theBoard->GetTopPlantAt(aCol, aRow, TOPPLANT_ONLY_NORMAL_POSITION))
+                continue;
+            theBoard->AddPlant(aCol, aRow, (SeedType)gTFDeadSeed[k], SeedType::SEED_NONE);
+        }
+        gTFDeadCount = 0;
+    }
+
     // ThirtyFlags v5: save progress on every flag change (board snapshot included)
     gTFSaveBoard = theBoard;
     ThirtyFlagsSaveProgress();
@@ -1384,6 +1403,15 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
         if (theZombie->mBodyHealth < theZombie->mBodyMaxHealth)
         {
             theZombie->mBodyHealth = min(theZombie->mBodyHealth + aHeal, theZombie->mBodyMaxHealth);
+
+        // 【三十旗·神格寒冰】减速效果附加真实伤害（此前定义了强化却从未接线）
+        {
+            int aGodIce = gThirtyFlags.GetStacks(TF_UPG_GOD_ICE);
+            if (aGodIce > 0 && theZombie->mIceTrapCounter > 0 && (theZombie->mZombieAge % 30) == 0)
+            {
+                theZombie->TakeDamage(4 * aGodIce, 0U);
+            }
+        }
         }
     }
 
@@ -2174,6 +2202,55 @@ void ThirtyFlagsPlantDied(Plant* thePlant)
         if (aRefund > 0)
         {
             thePlant->mBoard->AddSunMoney(aRefund);
+
+        // 【三十旗·涅槃】记录阵亡植物，下一面旗开始时复活
+        if (gThirtyFlags.GetStacks(TF_UPG_NIRVANA) > 0 && gTFDeadCount < 64)
+        {
+            gTFDeadCol[gTFDeadCount] = thePlant->mPlantCol;
+            gTFDeadRow[gTFDeadCount] = thePlant->mRow;
+            gTFDeadSeed[gTFDeadCount] = (int)thePlant->mSeedType;
+            gTFDeadCount++;
+        }
+        // 【三十旗·吞噬】阵亡时把自身最大生命的一部分分给四邻植物
+        {
+            int aDevour = gThirtyFlags.GetStacks(TF_UPG_DEVOUR);
+            if (aDevour > 0 && thePlant->mBoard)
+            {
+                int aShare = (int)((float)thePlant->mPlantMaxHealth * 0.125f * (float)aDevour);
+                static const int aDX[4] = { 1, -1, 0, 0 };
+                static const int aDY[4] = { 0, 0, 1, -1 };
+                for (int k = 0; k < 4; k++)
+                {
+                    int aCol = thePlant->mPlantCol + aDX[k];
+                    int aRow = thePlant->mRow + aDY[k];
+                    if (aCol < 0 || aCol >= MAX_GRID_SIZE_X || aRow < 0 || aRow >= MAX_GRID_SIZE_Y)
+                        continue;
+                    Plant* aNear = thePlant->mBoard->GetTopPlantAt(aCol, aRow, TOPPLANT_ONLY_NORMAL_POSITION);
+                    if (aNear && aNear != thePlant)
+                    {
+                        aNear->mPlantHealth += aShare;
+                        aNear->mPlantMaxHealth += aShare;
+                    }
+                }
+            }
+        }
+        // 【三十旗·连锁】爆炸类阵亡后再触发一次半额二次爆炸
+        {
+            int aChain = gThirtyFlags.GetStacks(TF_UPG_CHAIN);
+            if (aChain > 0)
+            {
+                SeedType aSeed = (SeedType)thePlant->mSeedType;
+                bool aExplosive = (aSeed == SeedType::SEED_CHERRYBOMB || aSeed == SeedType::SEED_JALAPENO ||
+                                   aSeed == SeedType::SEED_POTATOMINE || aSeed == SeedType::SEED_DOOMSHROOM ||
+                                   aSeed == SeedType::SEED_SQUASH || aSeed == SeedType::SEED_EXPLODE_O_NUT ||
+                                   aSeed == SeedType::SEED_GRAVEBUSTER || aSeed == SeedType::SEED_COBCANNON);
+                if (aExplosive)
+                {
+                    thePlant->mBoard->KillAllZombiesInRadius(thePlant->mRow, thePlant->mX, thePlant->mY,
+                        120, 0, false, 900 * aChain);
+                }
+            }
+        }
         }
     }
 
