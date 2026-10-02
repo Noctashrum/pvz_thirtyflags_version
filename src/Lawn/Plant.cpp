@@ -1579,13 +1579,45 @@ void Plant::UpdateTorchwood()
                 // 【三十旗】元素火球（策划案 6.2 完整版）：每种直射弹过火炬都有自己的表现。
                 // 【三十旗】火炬削弱（用户实测反馈）：随机元素只对**已经是火球**的弹生效；
                 // 寒冰豌豆保留“必然寒冰/极寒火球”；普通豌豆过树桩只变普通火球，不再随机。
+                // 【三十旗·叠种】同格多树桩 = 火球升级：
+                // 原版按"格子"防重复（mHitTorchwoodGridX），导致同格第二个树桩被跳过。
+                // 改为在第一个树桩处理时，一次性按同格树桩总数放大收益：
+                //   · 元素 roll N 次（取最优 —— 巨大优先）
+                //   · 巨大火球的伤害加成 ×N
+                // 后续同格树桩仍然跳过（避免每帧重复叠加）。
+                int aTorchCount = 1;
+                if (ThirtyFlagsMode() && mBoard)
+                {
+                    int aCount = 0;
+                    Plant* aScanTorch = nullptr;
+                    while (mBoard->IteratePlants(aScanTorch))
+                    {
+                        if (aScanTorch->mPlantCol == mPlantCol && aScanTorch->mRow == mRow &&
+                            aScanTorch->mSeedType == SeedType::SEED_TORCHWOOD &&
+                            aScanTorch->mPlantHealth > 0)
+                        {
+                            aCount++;
+                        }
+                    }
+                    if (aCount > 3) aCount = 3;   // 上限 3 层（防极端堆叠）
+                    if (aCount > 1) aTorchCount = aCount;
+                }
+
                 if (aProjectile->mProjectileType == ProjectileType::PROJECTILE_SNOWPEA)
                 {
                     aProjectile->mElement = (RandRangeInt(0, 1) == 0) ? TF_ELEM_ICE : TF_ELEM_DEEPFREEZE;
                 }
                 else if (aProjectile->mProjectileType == ProjectileType::PROJECTILE_FIREBALL)
                 {
-                    aProjectile->mElement = ThirtyFlagsRollFireballElement(mBoard ? mBoard->mMainCounter : 0);
+                    for (int aRollN = 0; aRollN < aTorchCount; aRollN++)
+                    {
+                        int aElemRoll = ThirtyFlagsRollFireballElement(mBoard ? mBoard->mMainCounter : 0);
+                        if (aRollN == 0 || aElemRoll == TF_ELEM_GIANT ||
+                            (aElemRoll != TF_ELEM_NONE && aProjectile->mElement == TF_ELEM_NONE))
+                        {
+                            aProjectile->mElement = aElemRoll;
+                        }
+                    }
                 }
                 else
                 {
@@ -1594,7 +1626,7 @@ void Plant::UpdateTorchwood()
 
                 if (aProjectile->mElement == TF_ELEM_GIANT)
                 {
-                    aProjectile->mDamage += TF_TORCH_MULTI_BONUS / 2;   // ThirtyFlags balance v5: giant fireball +20 (was +80)
+                    aProjectile->mDamage += (TF_TORCH_MULTI_BONUS / 2) * aTorchCount;   // ThirtyFlags: xN (stacked torchwoods) v5: giant fireball +20 (was +80)
                 }
                 if (aProjectile->mProjectileType == ProjectileType::PROJECTILE_STAR)
                 {
