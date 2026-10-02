@@ -705,7 +705,8 @@ void GameSelector::Update()
 			}
 			if (mApp->IsFirstTimeAdventureMode() && mLevel == 1 && !mApp->SaveFileExists())
 			{
-				mApp->PreNewGame(GameMode::GAMEMODE_INTRO, false);
+				// v5: skip the unplayable intro demo level - go straight into 1-1
+				mApp->PreNewGame(GameMode::GAMEMODE_ADVENTURE, false);
 				return;
 			}
 			if (mApp->mPlayerInfo->mNeedsMagicTacoReward && mLevel == 35)
