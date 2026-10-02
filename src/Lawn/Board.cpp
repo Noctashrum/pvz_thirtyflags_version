@@ -3046,7 +3046,7 @@ PlantingReason Board::CanPlantAt(int theGridX, int theGridY, SeedType theSeedTyp
 		{
 			return PlantingReason::PLANTING_OK;
 		}
-		if (Plant::IsUpgrade(theSeedType))
+		if (!ThirtyFlagsMode() && Plant::IsUpgrade(theSeedType))
 		{
 			return PlantingReason::PLANTING_NEEDS_UPGRADE;
 		}
@@ -3064,7 +3064,7 @@ PlantingReason Board::CanPlantAt(int theGridX, int theGridY, SeedType theSeedTyp
 		return PlantingReason::PLANTING_NOT_HERE;
 	}
 
-	if (!mApp->mEasyPlantingCheat && Plant::IsUpgrade(theSeedType))
+	if (!mApp->mEasyPlantingCheat && !ThirtyFlagsMode() && Plant::IsUpgrade(theSeedType))
 	{
 		return PlantingReason::PLANTING_NEEDS_UPGRADE;
 	}

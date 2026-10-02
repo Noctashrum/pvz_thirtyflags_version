@@ -13,6 +13,9 @@
 #include "../SexyAppFramework/Common.h"
 #include "../SexyAppFramework/Graphics.h"
 #include "../TodLib/EffectSystem.h"
+static void ThirtyFlagsSaveProgress();
+static bool ThirtyFlagsLoadProgress();
+
 
 #include <math.h>
 #include <string.h>
@@ -854,6 +857,12 @@ void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow
 void ThirtyFlagsInitRun(Board* theBoard)
 {
     gThirtyFlags.StartRun();
+
+    // ThirtyFlags v5: restore saved progress (flag + upgrades) and jump straight there
+    if (ThirtyFlagsLoadProgress() && theBoard)
+    {
+        ThirtyFlagsFlagChanged(theBoard);
+    }
     ThirtyFlagsSetupBoard(theBoard);
 
     // 开局已开放的行直接呈现为草皮，不留滚动动画
@@ -979,6 +988,9 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
     theBoard->mZombieCountDownStart = theBoard->mZombieCountDown;
     theBoard->mZombieHealthToNextWave = -1;
     theBoard->mZombieHealthWaveStart = 0;
+
+    // ThirtyFlags v5: save progress on every flag change
+    ThirtyFlagsSaveProgress();
 }
 
 void ThirtyFlagsIntermissionBegin(Board* theBoard)
@@ -2026,6 +2038,50 @@ static void ThirtyFlagsTickMarks()
                 gTFMarkCount[i] = 0;
         }
     }
+}
+
+// -------------------------------------------------------------------------------------------
+// 【三十旗】旗间进度存档（用户需求：不用每次从头打）——
+// 换旗时自动保存（旗次 + 强化池），三十旗开局时自动恢复并直接从存档旗次开始。
+// 文件：Release/thirtyflags_save.ini；删除该文件 = 从第 1 面旗重新开始。
+// -------------------------------------------------------------------------------------------
+static void ThirtyFlagsSaveProgress()
+{
+    FILE* f = fopen("thirtyflags_save.ini", "w");
+    if (!f) return;
+    fprintf(f, "flag=%d\n", gThirtyFlags.mFlag);
+    fprintf(f, "upgcount=%d\n", gThirtyFlags.mUpgradeCount);
+    for (int i = 0; i < TF_UPG_COUNT; i++)
+    {
+        if (gThirtyFlags.mUpgradeStacks[i] > 0)
+            fprintf(f, "u %d %d\n", i, gThirtyFlags.mUpgradeStacks[i]);
+    }
+    fclose(f);
+}
+
+static bool ThirtyFlagsLoadProgress()
+{
+    FILE* f = fopen("thirtyflags_save.ini", "r");
+    if (!f) return false;
+    char aLine[128];
+    bool aFound = false;
+    gThirtyFlags.mUpgradeCount = 0;
+    for (int i = 0; i < TF_UPG_COUNT; i++)
+        gThirtyFlags.mUpgradeStacks[i] = 0;
+    while (fgets(aLine, sizeof(aLine), f))
+    {
+        int aFlag, aCount, aIdx, aStacks;
+        if (sscanf(aLine, "flag=%d", &aFlag) == 1)      { gThirtyFlags.mFlag = aFlag; aFound = true; }
+        else if (sscanf(aLine, "upgcount=%d", &aCount) == 1) gThirtyFlags.mUpgradeCount = aCount;
+        else if (sscanf(aLine, "u %d %d", &aIdx, &aStacks) == 2)
+        {
+            if (aIdx >= 0 && aIdx < TF_UPG_COUNT) gThirtyFlags.mUpgradeStacks[aIdx] = aStacks;
+        }
+    }
+    fclose(f);
+    if (gThirtyFlags.mFlag < 1) gThirtyFlags.mFlag = 1;
+    if (gThirtyFlags.mFlag > 30) gThirtyFlags.mFlag = 30;
+    return aFound;
 }
 
 int ThirtyFlagsRollFireballElement(int theFrame)
