@@ -7992,8 +7992,11 @@ void Board::KeyDown(KeyCode theKey)
 		{
 			mApp->mZenGarden->AdvanceCrazyDaveDialog();
 		}
-		else if (theKey == KeyCode::KEYCODE_SPACE && mApp->CanPauseNow())
+		else if (theKey == KeyCode::KEYCODE_SPACE && mApp->CanPauseNow() &&
+			mApp->mGameMode != GameMode::GAMEMODE_THIRTY_FLAGS)
 		{
+			// 【三十旗】改走 KeyChar 里的 mPaused toggle：无对话框、再按空格即可恢复。
+			// 原版 DoPauseDialog 会弹出模态框，导致第二次按空格被 GetDialogCount() 挡掉。
 			mApp->PlaySample(Sexy::SOUND_PAUSE);
 			mApp->DoPauseDialog();
 		}
@@ -8049,10 +8052,11 @@ void Board::KeyChar(SexyChar theChar)
 	// 放在 cheat 区之前，非三十旗模式也可用。
 	if (theChar == _S(' '))
 	{
-		// 【三十旗】模态对话框（确认框等）存在时忽略空格，防止暂停状态错乱卡死
+		// 【三十旗】无框暂停：按空格暂停，再按空格继续（原版弹框路径已在本模式禁用）
 		if (mApp->GetDialogCount() > 0)
 			return;
 		mPaused = !mPaused;
+		mApp->PlaySample(Sexy::SOUND_PAUSE);
 		return;
 	}
 	if ((theChar >= _S('1') && theChar <= _S('9') || theChar == _S('0')) && mSeedBank != nullptr && !mPaused)

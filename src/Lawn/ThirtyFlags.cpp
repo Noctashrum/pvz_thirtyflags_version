@@ -1010,6 +1010,39 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
         gTFDeadCount = 0;
     }
 
+    // 【三十旗】新解锁行补小推车（场地铺设完成之后执行，确保 mPlantRow 已是最新）
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
+    {
+        if (!gThirtyFlags.IsRowUnlocked(aRow) || theBoard->mPlantRow[aRow] == PlantRowType::PLANTROW_DIRT)
+            continue;
+
+        bool aHasMower = false;
+        LawnMower* aScan = nullptr;
+        while (theBoard->mLawnMowers.IterateNext(aScan))
+        {
+            if (!aScan->mDead && aScan->mRow == aRow)
+            {
+                aHasMower = true;
+                break;
+            }
+        }
+
+        if (!aHasMower)
+        {
+            LawnMower* aNewMower = theBoard->mLawnMowers.DataArrayAlloc();
+            if (aNewMower)
+            {
+                aNewMower->LawnMowerInitialize(aRow);
+                aNewMower->mVisible = true;
+                aNewMower->mDead = false;
+            }
+        }
+        else if (aScan)
+        {
+            aScan->mVisible = true;
+        }
+    }
+
     // ThirtyFlags v5: save progress on every flag change (board snapshot included)
     gTFSaveBoard = theBoard;
     ThirtyFlagsSaveProgress();

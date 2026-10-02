@@ -2211,7 +2211,12 @@ void Zombie::UpdateZombieGargantuar()
     if (mZombiePhase == ZombiePhase::PHASE_GARGANTUAR_THROWING)
     {
         Reanimation* aBodyReanim = mApp->ReanimationGet(mBodyReanimID);
-        if (aBodyReanim->ShouldTriggerTimedEvent(0.74f))
+            // v5: 三十旗——投掷前摇放慢到约一半速度，给玩家反应窗口
+    if (mBoard && mBoard->mApp->mGameMode == GameMode::GAMEMODE_THIRTY_FLAGS)
+    {
+        aBodyReanim->mAnimRate = 0.5f;
+    }
+if (aBodyReanim->ShouldTriggerTimedEvent(0.74f))
         {
             mHasObject = false;
             ReanimShowPrefix("Zombie_imp", RENDER_GROUP_HIDDEN);
