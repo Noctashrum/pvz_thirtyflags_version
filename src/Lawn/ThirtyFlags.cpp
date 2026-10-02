@@ -2181,7 +2181,7 @@ static bool ThirtyFlagsLoadProgress()
         gThirtyFlags.mUpgradeStacks[i] = 0;
     while (fgets(aLine, sizeof(aLine), f))
     {
-        int aFlag, aCount, aIdx, aStacks;
+        int aFlag, aCount, aIdx, aStacks, v1;
         if (sscanf(aLine, "flag=%d", &aFlag) == 1)      { gThirtyFlags.mFlag = aFlag; aFound = true; }
         else if (sscanf(aLine, "upgcount=%d", &aCount) == 1) gThirtyFlags.mUpgradeCount = aCount;
         else if (sscanf(aLine, "sun=%d", &v1) == 1) gTFSavedSun = v1;
