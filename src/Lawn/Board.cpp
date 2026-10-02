@@ -2073,7 +2073,8 @@ Coin* Board::AddCoin(int theX, int theY, CoinType theCoinType, CoinMotion theCoi
 {
 	Coin* aCoin = mCoins.DataArrayAlloc();
 	aCoin->CoinInitialize(theX, theY, theCoinType, theCoinMotion);
-	if (mApp->IsFirstTimeAdventureMode() && mLevel == 1)
+	if (mApp->IsFirstTimeAdventureMode() && mLevel == 1 &&
+		mApp->mGameMode != GameMode::GAMEMODE_THIRTY_FLAGS)
 	{
 		DisplayAdvice(_S("[ADVICE_CLICK_ON_SUN]"), MessageStyle::MESSAGE_STYLE_TUTORIAL_LEVEL1_STAY, AdviceType::ADVICE_CLICK_ON_SUN);
 	}
@@ -5800,6 +5801,8 @@ void Board::UpdateTutorial()
 //0x414CB0
 void Board::SetTutorialState(TutorialState theTutorialState)
 {
+    if (mApp->mGameMode == GameMode::GAMEMODE_THIRTY_FLAGS)
+        return;   // v5: 三十旗不播教学演示
 	switch (theTutorialState)
 	{
 	case TutorialState::TUTORIAL_LEVEL_1_PICK_UP_PEASHOOTER:

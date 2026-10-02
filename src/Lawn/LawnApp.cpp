@@ -885,7 +885,7 @@ void LawnApp::GotFocus()
 //0x44F460
 void LawnApp::LostFocus()
 {
-    if (mGameMode == GameMode::GAMEMODE_THIRTY_FLAGS) return;   // v5: 失焦不弹暂停框（用户要求去掉）
+    return;   // v5: 所有模式都不再因窗口失焦弹出暂停对话框（用户要求去掉）
 	if (!mTodCheatKeys && CanPauseNow())
 	{
 		DoPauseDialog();
