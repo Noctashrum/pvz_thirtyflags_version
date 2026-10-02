@@ -8048,9 +8048,10 @@ void Board::KeyChar(SexyChar theChar)
 		mPaused = !mPaused;
 		return;
 	}
-	if (theChar >= _S('1') && theChar <= _S('9') && mSeedBank != nullptr && !mPaused)
+	if ((theChar >= _S('1') && theChar <= _S('9') || theChar == _S('0')) && mSeedBank != nullptr && !mPaused)
 	{
-		int aIdx = (int)(theChar - _S('1'));
+		// 【三十旗】0 = 第 10 号卡槽
+		int aIdx = (theChar == _S('0')) ? 9 : (int)(theChar - _S('1'));
 		if (aIdx < mSeedBank->mNumPackets)
 		{
 			SeedPacket* aPacket = &mSeedBank->mSeedPackets[aIdx];
@@ -8059,6 +8060,14 @@ void Board::KeyChar(SexyChar theChar)
 				aPacket->MouseDown(aPacket->mX + 20, aPacket->mY + 20, 1);
 			}
 		}
+		return;
+	}
+
+	// 【三十旗】`（反引号）拿起铲子；右键取消（原版行为）
+	if (theChar == _S('`') && mSeedBank != nullptr && !mPaused)
+	{
+		mCursorObject->mCursorType = CursorType::CURSOR_TYPE_SHOVEL;
+		mApp->PlayFoley(FoleyType::FOLEY_SHOVEL);
 		return;
 	}
 
