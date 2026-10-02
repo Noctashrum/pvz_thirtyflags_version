@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <ProjectGuid>{FCB358B4-DA9D-4891-9FE2-7163E0468F99}</ProjectGuid>
+    <RootNamespace>Lawn</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>PlantsVsZombies</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)..\$(Configuration)\</OutDir>
+    <IntDir>$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)..\$(Configuration)\</OutDir>
+    <IntDir>$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>
+      </SDLCheck>
+      <PreprocessorDefinitions>_USE_WIDE_STRING;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <DisableSpecificWarnings>26495;26812</DisableSpecificWarnings>
+      <UseFullPaths>false</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;Winmm.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <SDLCheck>
+      </SDLCheck>
+      <PreprocessorDefinitions>_USE_WIDE_STRING;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <OmitFramePointers>true</OmitFramePointers>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <DisableSpecificWarnings>26495;26812</DisableSpecificWarnings>
+      <UseFullPaths>false</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;Winmm.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\TodLib\Attachment.cpp" />
+    <ClCompile Include="..\TodLib\Definition.cpp" />
+    <ClCompile Include="..\TodLib\EffectSystem.cpp" />
+    <ClCompile Include="..\TodLib\FilterEffect.cpp" />
+    <ClCompile Include="..\TodLib\ReanimAtlas.cpp" />
+    <ClCompile Include="..\TodLib\Reanimator.cpp" />
+    <ClCompile Include="..\TodLib\StackWalk.cpp" />
+    <ClCompile Include="..\TodLib\TodCommon.cpp" />
+    <ClCompile Include="..\TodLib\TodDebug.cpp" />
+    <ClCompile Include="..\TodLib\PvzDebug.cpp" />
+    <ClCompile Include="..\TodLib\TodFoley.cpp" />
+    <ClCompile Include="..\TodLib\TodList.cpp" />
+    <ClCompile Include="..\TodLib\TodParticle.cpp" />
+    <ClCompile Include="..\TodLib\TodStringFile.cpp" />
+    <ClCompile Include="..\TodLib\Tod_SWTri.cpp" />
+    <ClCompile Include="..\TodLib\Trail.cpp" />
+    <ClCompile Include="AlmanacDialog.cpp" />
+    <ClCompile Include="AwardScreen.cpp" />
+    <ClCompile Include="Board.cpp" />
+    <ClCompile Include="Challenge.cpp" />
+    <ClCompile Include="ChallengeScreen.cpp" />
+    <ClCompile Include="CheatDialog.cpp" />
+    <ClCompile Include="Coin.cpp" />
+    <ClCompile Include="ContinueDialog.cpp" />
+    <ClCompile Include="CreditScreen.cpp" />
+    <ClCompile Include="CursorObject.cpp" />
+    <ClCompile Include="CutScene.cpp" />
+    <ClCompile Include="DataSync.cpp" />
+    <ClCompile Include="GameButton.cpp" />
+    <ClCompile Include="GameObject.cpp" />
+    <ClCompile Include="GameSelector.cpp" />
+    <ClCompile Include="GridItem.cpp" />
+    <ClCompile Include="ImitaterDialog.cpp" />
+    <ClCompile Include="LawnApp.cpp" />
+    <ClCompile Include="LawnCommon.cpp" />
+    <ClCompile Include="LawnDialog.cpp" />
+    <ClCompile Include="LawnMower.cpp" />
+    <ClCompile Include="MessageWidget.cpp" />
+    <ClCompile Include="Music.cpp" />
+    <ClCompile Include="NewOptionsDialog.cpp" />
+    <ClCompile Include="NewUserDialog.cpp" />
+    <ClCompile Include="Plant.cpp" />
+    <ClCompile Include="PlayerInfo.cpp" />
+    <ClCompile Include="PoolEffect.cpp" />
+    <ClCompile Include="PopDRMComm.cpp" />
+    <ClCompile Include="ProfileMgr.cpp" />
+    <ClCompile Include="Projectile.cpp" />
+    <ClCompile Include="ReanimationLawn.cpp" />
+    <ClCompile Include="Resources.cpp" />
+    <ClCompile Include="SaveGame.cpp" />
+    <ClCompile Include="SeedChooserScreen.cpp" />
+    <ClCompile Include="SeedPacket.cpp" />
+    <ClCompile Include="StoreScreen.cpp" />
+    <ClCompile Include="TFDialog.cpp" />
+    <ClCompile Include="ThirtyFlags.cpp" />
+    <ClCompile Include="TitleScreen.cpp" />
+    <ClCompile Include="ToolTipWidget.cpp" />
+    <ClCompile Include="TypingCheck.cpp" />
+    <ClCompile Include="UserDialog.cpp" />
+    <ClCompile Include="ZenGarden.cpp" />
+    <ClCompile Include="Zombie.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\resource.h" />
+    <ClInclude Include="..\TodLib\Attachment.h" />
+    <ClInclude Include="..\TodLib\DataArray.h" />
+    <ClInclude Include="..\TodLib\Definition.h" />
+    <ClInclude Include="..\TodLib\EffectSystem.h" />
+    <ClInclude Include="..\TodLib\FilterEffect.h" />
+    <ClInclude Include="..\TodLib\ReanimAtlas.h" />
+    <ClInclude Include="..\TodLib\Reanimator.h" />
+    <ClInclude Include="..\TodLib\StackWalk.h" />
+    <ClInclude Include="..\TodLib\TodCommon.h" />
+    <ClInclude Include="..\TodLib\TodDebug.h" />
+    <ClInclude Include="..\TodLib\PvzDebug.h" />
+    <ClInclude Include="..\TodLib\TodFoley.h" />
+    <ClInclude Include="..\TodLib\TodList.h" />
+    <ClInclude Include="..\TodLib\TodParticle.h" />
+    <ClInclude Include="..\TodLib\TodStringFile.h" />
+    <ClInclude Include="..\TodLib\Tod_SWTri.h" />
+    <ClInclude Include="..\TodLib\Trail.h" />
+    <ClInclude Include="AlmanacDialog.h" />
+    <ClInclude Include="AwardScreen.h" />
+    <ClInclude Include="Board.h" />
+    <ClInclude Include="Challenge.h" />
+    <ClInclude Include="ChallengeScreen.h" />
+    <ClInclude Include="CheatDialog.h" />
+    <ClInclude Include="Coin.h" />
+    <ClInclude Include="ContinueDialog.h" />
+    <ClInclude Include="CreditScreen.h" />
+    <ClInclude Include="CursorObject.h" />
+    <ClInclude Include="Cutscene.h" />
+    <ClInclude Include="DataSync.h" />
+    <ClInclude Include="GameButton.h" />
+    <ClInclude Include="GameObject.h" />
+    <ClInclude Include="GameSelector.h" />
+    <ClInclude Include="GridItem.h" />
+    <ClInclude Include="ImitaterDialog.h" />
+    <ClInclude Include="LawnApp.h" />
+    <ClInclude Include="LawnCommon.h" />
+    <ClInclude Include="LawnDialog.h" />
+    <ClInclude Include="LawnMower.h" />
+    <ClInclude Include="MessageWidget.h" />
+    <ClInclude Include="Music.h" />
+    <ClInclude Include="NewOptionsDialog.h" />
+    <ClInclude Include="NewUserDialog.h" />
+    <ClInclude Include="Plant.h" />
+    <ClInclude Include="PlayerInfo.h" />
+    <ClInclude Include="PoolEffect.h" />
+    <ClInclude Include="PopDRMComm.h" />
+    <ClInclude Include="ProfileMgr.h" />
+    <ClInclude Include="Projectile.h" />
+    <ClInclude Include="ReanimationLawn.h" />
+    <ClInclude Include="Resources.h" />
+    <ClInclude Include="SaveGame.h" />
+    <ClInclude Include="SeedChooserScreen.h" />
+    <ClInclude Include="SeedPacket.h" />
+    <ClInclude Include="StoreScreen.h" />
+    <ClInclude Include="TFDialog.h" />
+    <ClInclude Include="ThirtyFlags.h" />
+    <ClInclude Include="TitleScreen.h" />
+    <ClInclude Include="ToolTipWidget.h" />
+    <ClInclude Include="TypingCheck.h" />
+    <ClInclude Include="UserDialog.h" />
+    <ClInclude Include="ZenGarden.h" />
+    <ClInclude Include="Zombie.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Cursor13.cur" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\LawnProject.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\main_ico.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SexyAppFramework\SexyAppBase WideString.vcxproj">
+      <Project>{da08caba-92ac-40f0-b63d-6ace7814d600}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -1,0 +1,61 @@
+# ==============================================================================
+# 植物大战僵尸 · 三十旗 1-1 改版 —— Git 忽略规则
+# ==============================================================================
+# 入库：源码 + 游玩版 exe + 运行依赖（main.pak / bass.dll / properties/）
+#       + 构建脚本与技术文档   →  下载仓库后直接运行 PlantsVsZombies_Play.exe 即玩
+# 忽略：编译中间产物、调试版 exe 与符号文件、日志、内部策划文档、个人工作数据
+# ==============================================================================
+
+# ---- 编译中间产物（可重新生成）----
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.tlog
+*.iobj
+*.ipdb
+*.lastbuildstate
+*.res
+
+# 各模块的 obj 输出目录
+src/Lawn/Release/
+src/Lawn/ReleasePlayer/
+src/Lawn/Debug/
+src/SexyAppFramework/Release/
+src/SexyAppFramework/Debug/
+src/**/Release/
+src/**/Debug/
+
+# ---- 调试版产物（不对外发布；游玩版 PlantsVsZombies_Play.exe 入库）----
+Release/PlantsVsZombies.exe
+Debug/
+
+# ---- 运行日志与本地调试产物（运行依赖包里不含这些）----
+*.log
+Release/crash.txt
+Release/pvzdebug.ini
+Release/save/
+Release/userdata/
+
+# ---- 内部策划 / 设计文档（不对外发布）----
+植物大战僵尸三十旗_1-1改版策划案.docx
+*.docx
+*.doc
+docs/三十旗改版-平衡方案-v*.md
+docs/内部*
+
+# ---- 开发工具与个人数据 ----
+.workbuddy/
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# ---- 临时文件 ----
+*.tmp
+*.bak
+*~
+docs/_plan*.png

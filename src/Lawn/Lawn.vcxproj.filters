@@ -1,0 +1,451 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Lawn">
+      <UniqueIdentifier>{0147596a-5120-46f0-81a9-8d70334cd51c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Board">
+      <UniqueIdentifier>{5af6f2e8-6ba0-4869-88d8-60188173b89c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Misc">
+      <UniqueIdentifier>{51951fe5-c58b-4c6e-b3ec-b77a9a790555}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Widget">
+      <UniqueIdentifier>{adfa17d2-bbd5-462c-9dd1-e789beb31924}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Widget\Widget Include">
+      <UniqueIdentifier>{78195392-b5d8-4384-b5e5-db568a38499e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Widget\Widget Source">
+      <UniqueIdentifier>{0ea1bd12-c53a-4981-a487-c4b67bdfba79}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TodLib">
+      <UniqueIdentifier>{0c83c9bb-fe9a-4e25-a2be-65c6c936d3ba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TodLib\Common">
+      <UniqueIdentifier>{f616daa6-40aa-42ff-9012-a28b831369c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TodLib\Common\TodCommon Include">
+      <UniqueIdentifier>{2dca47e7-d793-43b2-956d-1a08121519f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TodLib\Common\TodCommon Source">
+      <UniqueIdentifier>{17c5b2d2-83d5-4375-9021-03cfc759e675}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TodLib\Effect">
+      <UniqueIdentifier>{e75cec39-b99c-4bf4-9967-a11f079850da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TodLib\Effect\Effect Include">
+      <UniqueIdentifier>{fc2a5ba3-bcb3-4b44-8c2b-b7329a41ae39}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TodLib\Effect\Effect Source">
+      <UniqueIdentifier>{8972d805-24c6-48de-bd22-8b098f1320c3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Misc\Misc Include">
+      <UniqueIdentifier>{861eb80a-6315-496b-8f5e-3b68b940cc2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Misc\Misc Source">
+      <UniqueIdentifier>{193d766d-d166-46e9-83b2-14a324d05178}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Board\Board Include">
+      <UniqueIdentifier>{a93ec88a-c23c-4df2-809e-49dbb1085e23}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lawn\Board\Board Source">
+      <UniqueIdentifier>{b099ad4b-0f2a-494a-ba6c-d14f2504c575}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="AlmanacDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="AwardScreen.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="LawnApp.cpp">
+      <Filter>Lawn</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\Tod_SWTri.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\TodStringFile.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\TodCommon.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\TodDebug.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\PvzDebug.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\StackWalk.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\TodList.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\Definition.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\TodFoley.cpp">
+      <Filter>TodLib\Common\TodCommon Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\ReanimAtlas.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\FilterEffect.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\Reanimator.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\TodParticle.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\Trail.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\Attachment.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\TodLib\EffectSystem.cpp">
+      <Filter>TodLib\Effect\Effect Source</Filter>
+    </ClCompile>
+    <ClCompile Include="DataSync.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="LawnCommon.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Resources.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="TypingCheck.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="GameButton.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="LawnDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="CheatDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ContinueDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="CreditScreen.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ChallengeScreen.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ReanimationLawn.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Music.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="PlayerInfo.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="PoolEffect.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="PopDRMComm.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ProfileMgr.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="StoreScreen.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="SeedChooserScreen.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ImitaterDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="GameObject.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="LawnMower.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="GameSelector.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="NewOptionsDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="TitleScreen.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="UserDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ZenGarden.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ToolTipWidget.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="CursorObject.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Plant.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="GridItem.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="MessageWidget.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="NewUserDialog.cpp">
+      <Filter>Lawn\Widget\Widget Source</Filter>
+    </ClCompile>
+    <ClCompile Include="SeedPacket.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Projectile.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Zombie.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirtyFlags.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="TFDialog.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Coin.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="CutScene.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Board.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+    <ClCompile Include="SaveGame.cpp">
+      <Filter>Lawn\Misc\Misc Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Challenge.cpp">
+      <Filter>Lawn\Board\Board Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AlmanacDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="AwardScreen.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="LawnApp.h">
+      <Filter>Lawn</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\Tod_SWTri.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\TodCommon.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\TodStringFile.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\DataArray.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\TodDebug.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\PvzDebug.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\StackWalk.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\TodList.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\Definition.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\TodFoley.h">
+      <Filter>TodLib\Common\TodCommon Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\ReanimAtlas.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\FilterEffect.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\Reanimator.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\TodParticle.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\Trail.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\Attachment.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TodLib\EffectSystem.h">
+      <Filter>TodLib\Effect\Effect Include</Filter>
+    </ClInclude>
+    <ClInclude Include="LawnCommon.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Resources.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="DataSync.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="TypingCheck.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ChallengeScreen.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="GameButton.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="LawnDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="CheatDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ContinueDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="CreditScreen.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="GameSelector.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="LawnMower.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ReanimationLawn.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Music.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="PlayerInfo.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="PoolEffect.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="PopDRMComm.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ProfileMgr.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="StoreScreen.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="SeedChooserScreen.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ImitaterDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="GameObject.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="NewOptionsDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="TitleScreen.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="UserDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ZenGarden.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ToolTipWidget.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="CursorObject.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Plant.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="GridItem.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="MessageWidget.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="NewUserDialog.h">
+      <Filter>Lawn\Widget\Widget Include</Filter>
+    </ClInclude>
+    <ClInclude Include="SeedPacket.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Projectile.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Zombie.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirtyFlags.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="TFDialog.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Coin.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Cutscene.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Board.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="SaveGame.h">
+      <Filter>Lawn\Misc\Misc Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Challenge.h">
+      <Filter>Lawn\Board\Board Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\resource.h">
+      <Filter>资源文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Cursor13.cur">
+      <Filter>资源文件</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\LawnProject.rc">
+      <Filter>资源文件</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\main_ico.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+  </ItemGroup>
+</Project>

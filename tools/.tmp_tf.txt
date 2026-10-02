@@ -1,0 +1,1578 @@
+#include "ThirtyFlags.h"
+#include "Board.h"
+#include "Challenge.h"
+#include "GridItem.h"
+#include "LawnApp.h"
+#include "LawnDialog.h"
+#include "Plant.h"
+#include "Projectile.h"
+#include "PoolEffect.h"
+#include "Resources.h"
+#include "../SexyAppFramework/Common.h"
+#include "../SexyAppFramework/Graphics.h"
+#include "../TodLib/EffectSystem.h"
+
+#include <math.h>
+#include <string.h>
+
+using namespace Sexy;
+
+// ====================================================================================================
+// 《植物大战僵尸：三十旗》实现
+//
+// 场地采用「日间布局」（5 行 x 100px）+ 局部水路：
+//   * 日间布局才能复用原版的草皮滚动动画（IMAGE_BACKGROUND1UNSODDED + IMAGE_SOD1ROW）；
+//   * 水路不再是整张泳池背景，而是按格从 IMAGE_POOL 取水格绘制（该图是 15x5 的水格阵列）；
+//   * 行解锁时播放草皮滚出动画；未开放的行绘制黑幕，形成原版左侧草坪缺口那种观感。
+//
+// 注意：GridToPixelY 的行高由 StageHasPool() 全局二选一（日间 100px / 泳池 85px），
+// 无法行级混用。日间布局下第 6 行 y=580 已越界，因此三十旗按 5 行设计。
+// ====================================================================================================
+
+ThirtyFlags gThirtyFlags;
+
+static inline int TFClampI(int theValue, int theMin, int theMax)
+{
+    return theValue <= theMin ? theMin : (theValue >= theMax ? theMax : theValue);
+}
+
+bool ThirtyFlagsMode()
+{
+    return gThirtyFlags.mActive && gLawnApp && gLawnApp->mGameMode == GAMEMODE_THIRTY_FLAGS;
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 30 旗波次表（策划案第 2 / 4 章，按日间 5 行布局重新编排）
+//
+// mUnlockedRows / mWaterRows 为 5 位掩码（bit0=第 1 行 … bit4=第 5 行）。
+// 解锁节奏：开局只给中间 1 道（真 1-1 观感）→ 逐步扩到 4 道 → 两端转水路。
+// ----------------------------------------------------------------------------------------------------
+#define TF_R2       (1 << 2)
+#define TF_R1_3     ((1 << 1) | (1 << 3) | TF_R2)
+#define TF_R0_4     ((1 << 0) | (1 << 4) | TF_R1_3)
+
+// 日间布局只有 5 行可用（第 6 行 y=580 已出画面），因此按 5 条道编排：
+//   中路 1 道开局 -> 逐旗扩到 4 道陆地 -> 再让两端转水路。
+// 水面按「整行满水」绘制（不拉伸贴图），因此 mWaterCols 仅作「该行是否为水」的开关，
+// 取值为 MAX_GRID_SIZE_X 表示整行皆水。
+static const ThirtyFlagsFlagDef gThirtyFlagsFlagDefs[TF_TOTAL_FLAGS] = {
+    // 旗次  主题            点数  水路行        水列      雾列  开放行
+    {  1,   "独木难支",      1,    0,            0,        0,    TF_R2 },
+    {  2,   "独木难支",      1,    0,            0,        0,    TF_R2 },
+    {  3,   "独木难支",      1,    0,            0,        0,    TF_R2 },
+    {  4,   "场地打开",      2,    0,            0,        0,    TF_R2 | (1 << 1) },
+    {  5,   "场地打开",      2,    0,            0,        0,    TF_R2 | (1 << 1) },
+    {  6,   "场地打开",      3,    0,            0,        0,    TF_R2 | (1 << 1) },
+    {  7,   "场地打开",      3,    0,            0,        0,    TF_R2 | (1 << 1) },
+    {  8,   "三线成形",      4,    0,            0,        0,    TF_R1_3 },
+    {  9,   "三线成形",      4,    0,            0,        0,    TF_R1_3 },
+    { 10,   "三线成形",      5,    0,            0,        0,    TF_R1_3 },
+    { 11,   "三线成形",      5,    0,            0,        0,    TF_R1_3 },
+    { 12,   "三线成形",      6,    0,            0,        0,    TF_R1_3 },
+    { 13,   "四线铺开",      6,    0,            0,        0,    (1 << 0) | TF_R1_3 },
+    { 14,   "四线铺开",      7,    0,            0,        0,    (1 << 0) | TF_R1_3 },
+    { 15,   "四线铺开",      7,    0,            0,        3,    (1 << 0) | TF_R1_3 },
+    { 16,   "四线铺开",      8,    0,            0,        3,    (1 << 0) | TF_R1_3 },
+    { 17,   "四线铺开",      8,    0,            0,        3,    (1 << 0) | TF_R1_3 },
+    { 18,   "水路登场",      9,    (1 << 4),      MAX_GRID_SIZE_X, 3,  TF_R0_4 },
+    { 19,   "水路登场",      9,    (1 << 4),      MAX_GRID_SIZE_X, 3,  TF_R0_4 },
+    { 20,   "双向水路",      10,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 21,   "双向水路",      11,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 22,   "双向水路",      12,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 23,   "双向水路",      13,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 24,   "双向水路",      14,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 25,   "双方超模",      15,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 26,   "双方超模",      17,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 27,   "双方超模",      19,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 28,   "双方超模",      22,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 29,   "双方超模",      25,   (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 },
+    { 30,   "僵王终战",      0,    (1 << 4) | (1 << 0), MAX_GRID_SIZE_X, 3, TF_R0_4 }
+};
+
+// ----------------------------------------------------------------------------------------------------
+// 每行草皮滚出的动画进度（0..1000）。行解锁时置 0 并逐帧推进到 1000。
+// ----------------------------------------------------------------------------------------------------
+static int gThirtyFlagsSodProgress[MAX_GRID_SIZE_Y];
+static int gThirtyFlagsPrevUnlockedRows = 0;
+
+// 每格是否已变成水（用于水格淡入，避免换旗时水突然出现）
+static int gThirtyFlagsWaterFade[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
+
+// ----------------------------------------------------------------------------------------------------
+// 当前旗次
+//   mSurvivalStage 全程等于「已完成旗数」，任何调用时机都成立；
+//   不能只依赖 mFlag（Board::InitSurvivalStage 会在阶段自增前调用 InitZombieWaves）。
+// ----------------------------------------------------------------------------------------------------
+int ThirtyFlagsCurrentFlag(Board* theBoard)
+{
+    if (!theBoard || !theBoard->mChallenge)
+        return 1;
+
+    return TFClampI(theBoard->mChallenge->mSurvivalStage + 1, 1, TF_TOTAL_FLAGS);
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 僵尸辅助
+// ----------------------------------------------------------------------------------------------------
+static inline void TFSetElite(Zombie* theZombie, int theKind)
+{
+    theZombie->mBossMode |= (1 << theKind);
+}
+
+static inline bool TFHasElite(Zombie* theZombie, int theKind)
+{
+    return (theZombie->mBossMode & (1 << theKind)) != 0;
+}
+
+// 尸毒毒潭：每格剩余帧数
+static int gThirtyFlagsPoison[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
+
+static void TFAddPoison(int theCol, int theRow, int theFrames)
+{
+    if (theCol < 0 || theCol >= MAX_GRID_SIZE_X || theRow < 0 || theRow >= MAX_GRID_SIZE_Y)
+        return;
+
+    gThirtyFlagsPoison[theCol][theRow] = max(gThirtyFlagsPoison[theCol][theRow], theFrames);
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 肉鸽强化静态表（策划案 7.2 / 7.3 / 7.4，共 36 条，全部可叠加）
+// ----------------------------------------------------------------------------------------------------
+static const ThirtyFlagsUpgradeDef gThirtyFlagsUpgradeDefs[TF_UPG_COUNT] = {
+    // ---- 普通池 ----
+    { TF_UPG_HASTE,                TF_RARITY_COMMON,    _S("急速"),         _S("全植物攻速 +12%") },
+    { TF_UPG_BARRAGE,              TF_RARITY_COMMON,    _S("弹幕"),         _S("射手类额外发射 1 发弹丸") },
+    { TF_UPG_REINFORCE,            TF_RARITY_COMMON,    _S("加固"),         _S("全植物生命 +35%") },
+    { TF_UPG_ARMORPIERCE,          TF_RARITY_COMMON,    _S("穿甲"),         _S("无视 25% 护甲") },
+    { TF_UPG_MASS_PRODUCE,         TF_RARITY_COMMON,    _S("量产"),         _S("种植费用 -20%") },
+    { TF_UPG_ABUNDANCE,            TF_RARITY_COMMON,    _S("丰饶"),         _S("自然阳光掉落间隔 -25%") },
+
+    // ---- 稀有池 ----
+    { TF_UPG_CRIT,                 TF_RARITY_RARE,      _S("暴击"),         _S("15% 概率造成 2 倍伤害") },
+    { TF_UPG_COOLDOWN,             TF_RARITY_RARE,      _S("冷却"),         _S("全植物冷却 -20%") },
+    { TF_UPG_SIPHON,               TF_RARITY_RARE,      _S("虹吸"),         _S("击杀回 3 阳光") },
+    { TF_UPG_THORNS,               TF_RARITY_RARE,      _S("荆棘"),         _S("反弹 20% 所受伤害") },
+    { TF_UPG_HIGH_YIELD,           TF_RARITY_RARE,      _S("高产"),         _S("向日葵产出 +60%") },
+    { TF_UPG_DRAIN,                TF_RARITY_RARE,      _S("汲取"),         _S("植物阵亡返还 50% 种植费") },
+
+    // ---- 史诗池：联动与转化 ----
+    { TF_UPG_RESONANCE_HASTE,      TF_RARITY_EPIC,      _S("共鸣·攻速"),    _S("每持有 1 条「急速」，全植物攻速额外 +8%") },
+    { TF_UPG_RESONANCE_BARRAGE,    TF_RARITY_EPIC,      _S("共鸣·弹幕"),    _S("每持有 1 条「弹幕」，射手类伤害 +15%") },
+    { TF_UPG_RESONANCE_WEALTH,     TF_RARITY_EPIC,      _S("共鸣·财富"),    _S("每持有 1 条经济类强化，全植物攻击力 +10%") },
+    { TF_UPG_BLOOD_RAGE,           TF_RARITY_EPIC,      _S("血怒转化"),     _S("全植物当前生命的 30% 转化为攻击力") },
+    { TF_UPG_COMPOUND_SUN,         TF_RARITY_EPIC,      _S("复利·阳光"),    _S("每旗结束时，当前阳光储备 x1.15") },
+    { TF_UPG_CHAIN,                TF_RARITY_EPIC,      _S("连锁"),         _S("爆炸类命中后触发一次半额二次爆炸") },
+    { TF_UPG_OVERLOAD,             TF_RARITY_EPIC,      _S("临界·超载"),    _S("攻速加成每达到 +100%，射手追加 1 发弹丸") },
+    { TF_UPG_SYMBIOSIS_WATER,      TF_RARITY_EPIC,      _S("共生·水路"),    _S("睡莲上的植物攻速 +30%，且睡莲不再占卡槽") },
+    { TF_UPG_SCAVENGE,             TF_RARITY_EPIC,      _S("拾荒"),         _S("每累计击杀 500 只僵尸，全植物攻击力 +10%") },
+    { TF_UPG_DESPERATION,          TF_RARITY_EPIC,      _S("绝境"),         _S("每失去 1 点防线（一格被占），全植物攻速 +5%") },
+
+    // ---- 传说池：指数级与规则改写 ----
+    { TF_UPG_GOD_PEA,              TF_RARITY_LEGENDARY, _S("神格·豌豆"),    _S("所有豌豆类变为加特林形态，攻速 x2（可叠加）") },
+    { TF_UPG_GOD_NUT,              TF_RARITY_LEGENDARY, _S("神格·坚果"),    _S("所有坚果类生命 x3，阵亡时对整行造成巨额伤害") },
+    { TF_UPG_GOD_ICE,              TF_RARITY_LEGENDARY, _S("神格·寒冰"),    _S("所有减速效果附加真实伤害") },
+    { TF_UPG_NEURO_CRIT,           TF_RARITY_LEGENDARY, _S("神经·暴击"),    _S("暴击不再有概率，每次攻击必暴，倍率 +1") },
+    { TF_UPG_INFINITE,             TF_RARITY_LEGENDARY, _S("无限"),         _S("卡槽位 +2（可超过 12）") },
+    { TF_UPG_NIRVANA,              TF_RARITY_LEGENDARY, _S("涅槃"),         _S("每旗开始时复活上一旗阵亡的植物") },
+    { TF_UPG_DEVOUR,               TF_RARITY_LEGENDARY, _S("吞噬"),         _S("植物阵亡时把其全部属性分给相邻植物") },
+    { TF_UPG_LEFT_FOOT_RIGHT_FOOT, TF_RARITY_LEGENDARY, _S("左脚踩右脚"),   _S("每持有 1 条传说强化，所有强化效果 +30%（自身也计入）") },
+    { TF_UPG_OVERLOADED,           TF_RARITY_LEGENDARY, _S("超载"),         _S("全植物攻速 +50%，生命 -30%") },
+    { TF_UPG_TIME_STOP,            TF_RARITY_LEGENDARY, _S("时间停滞"),     _S("每旗的前 10 秒，所有僵尸无法移动") }
+};
+
+// ----------------------------------------------------------------------------------------------------
+// 僵尸登场表
+// ----------------------------------------------------------------------------------------------------
+void ThirtyFlags::BuildZombieMask(int theFlag, bool* theAllowed)
+{
+    for (int i = 0; i < NUM_ZOMBIE_TYPES; i++)
+    {
+        theAllowed[i] = false;
+    }
+
+    theAllowed[(int)ZOMBIE_NORMAL] = true;
+    theAllowed[(int)ZOMBIE_FLAG] = true;
+    if (theFlag <= 1)
+        return;
+
+    if (theFlag >= 2)  theAllowed[(int)ZOMBIE_TRAFFIC_CONE] = true;
+    if (theFlag >= 4)  theAllowed[(int)ZOMBIE_PAIL] = true;
+    if (theFlag >= 5)
+    {
+        theAllowed[(int)ZOMBIE_POLEVAULTER] = true;
+        theAllowed[(int)ZOMBIE_NEWSPAPER] = true;
+    }
+    if (theFlag >= 7)
+    {
+        theAllowed[(int)ZOMBIE_DOOR] = true;
+        theAllowed[(int)ZOMBIE_DUCKY_TUBE] = true;
+    }
+    if (theFlag >= 13) theAllowed[(int)ZOMBIE_SNORKEL] = true;
+    if (theFlag >= 11) theAllowed[(int)ZOMBIE_FOOTBALL] = true;
+    if (theFlag >= 12) theAllowed[(int)ZOMBIE_DANCER] = true;
+    if (theFlag >= 16)
+    {
+        theAllowed[(int)ZOMBIE_DOLPHIN_RIDER] = true;
+        theAllowed[(int)ZOMBIE_BALLOON] = true;
+    }
+    if (theFlag >= 16) theAllowed[(int)ZOMBIE_DIGGER] = true;
+    if (theFlag >= 17)
+    {
+        theAllowed[(int)ZOMBIE_JACK_IN_THE_BOX] = true;
+        theAllowed[(int)ZOMBIE_LADDER] = true;
+    }
+    if (theFlag >= 19) theAllowed[(int)ZOMBIE_CATAPULT] = true;
+    if (theFlag >= 20) theAllowed[(int)ZOMBIE_POGO] = true;
+    if (theFlag >= 22) theAllowed[(int)ZOMBIE_GARGANTUAR] = true;
+    if (theFlag >= 25) theAllowed[(int)ZOMBIE_ZAMBONI] = true;
+    if (theFlag >= 26)
+    {
+        theAllowed[(int)ZOMBIE_PEA_HEAD] = true;
+        theAllowed[(int)ZOMBIE_WALLNUT_HEAD] = true;
+    }
+    if (theFlag >= 28) theAllowed[(int)ZOMBIE_REDEYE_GARGANTUAR] = true;
+    if (theFlag >= 29)
+    {
+        theAllowed[(int)ZOMBIE_JALAPENO_HEAD] = true;
+        theAllowed[(int)ZOMBIE_GATLING_HEAD] = true;
+        theAllowed[(int)ZOMBIE_SQUASH_HEAD] = true;
+        theAllowed[(int)ZOMBIE_TALLNUT_HEAD] = true;
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 构造 / 生命周期
+// ----------------------------------------------------------------------------------------------------
+ThirtyFlags::ThirtyFlags()
+{
+    mActive = false;
+    mFlag = 0;
+    mUnlockedRows = TF_R2;
+    mWaterRows = 0;
+    mWaterCols = 0;
+    mFogCols = 0;
+    memset(mMutations, 0, sizeof(mMutations));
+    mMutationPicksLeft = 0;
+    memset(mUpgradeStacks, 0, sizeof(mUpgradeStacks));
+    mUpgradeCount = 0;
+    mLegendaryCount = 0;
+    mIntermission = false;
+    mUpgradeChosen = false;
+    mUpgradeDialogShown = false;
+    mPendingUpgradeChoices[0] = TF_UPG_HASTE;
+    mPendingUpgradeChoices[1] = TF_UPG_HASTE;
+    mPendingUpgradeChoices[2] = TF_UPG_HASTE;
+    mPrepTimeLeft = 0;
+    mPrepTimeStart = 1;
+    mSunAtFlagStart = 0;
+    mTotalKills = 0;
+    mKillStreak = 0;
+    mKillStreakTimer = 0;
+    mLostLanes = 0;
+}
+
+void ThirtyFlags::StartRun()
+{
+    *this = ThirtyFlags();
+    mActive = true;
+    mMutationPicksLeft = TF_MUTATION_PICKS;
+    ApplyFlag(1);
+
+    memset(gThirtyFlagsPoison, 0, sizeof(gThirtyFlagsPoison));
+    memset(gThirtyFlagsWaterFade, 0, sizeof(gThirtyFlagsWaterFade));
+
+    // 开局：已开放的行直接显示为草皮（不播动画），其余行等解锁时再滚出
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
+    {
+        gThirtyFlagsSodProgress[aRow] = 0;
+    }
+    gThirtyFlagsPrevUnlockedRows = 0;
+}
+
+void ThirtyFlags::EndRun()
+{
+    mActive = false;
+    mIntermission = false;
+}
+
+void ThirtyFlags::ApplyFlag(int theFlag)
+{
+    mFlag = TFClampI(theFlag, 1, TF_TOTAL_FLAGS);
+    const ThirtyFlagsFlagDef& aDef = GetFlagDef(mFlag);
+    mUnlockedRows = aDef.mUnlockedRows;
+    mWaterRows = aDef.mWaterRows;
+    mWaterCols = aDef.mWaterCols;
+    mFogCols = aDef.mFogCols;
+}
+
+const ThirtyFlagsFlagDef& ThirtyFlags::GetFlagDef(int theFlag)
+{
+    return gThirtyFlagsFlagDefs[TFClampI(theFlag, 1, TF_TOTAL_FLAGS) - 1];
+}
+
+const ThirtyFlagsUpgradeDef& ThirtyFlags::GetUpgradeDef(ThirtyFlagsUpgrade theUpgrade)
+{
+    return gThirtyFlagsUpgradeDefs[TFClampI((int)theUpgrade, 0, TF_UPG_COUNT - 1)];
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 场地
+// ----------------------------------------------------------------------------------------------------
+bool ThirtyFlags::IsWaterCell(int theRow, int theCol) const
+{
+    if (!IsWaterRow(theRow) || mWaterCols <= 0)
+        return false;
+
+    return theCol >= MAX_GRID_SIZE_X - mWaterCols;
+}
+
+int ThirtyFlags::GetWalkableRowCount() const
+{
+    int aCount = 0;
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
+    {
+        if (IsRowUnlocked(aRow))
+            aCount++;
+    }
+    return aCount;
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 尸潮进化：成长
+// ----------------------------------------------------------------------------------------------------
+bool ThirtyFlags::HasMutation(int theMutation) const
+{
+    if (theMutation < 0 || theMutation >= NUM_MUTATIONS)
+        return false;
+    return mMutations[theMutation];
+}
+
+float ThirtyFlags::GetHealthScale() const
+{
+    float aScale = powf(1.0f + TF_HP_GROWTH_PER_FLAG, (float)(mFlag - 1));
+    return min(aScale, TF_HP_GROWTH_CAP);
+}
+
+float ThirtyFlags::GetSpeedScale() const
+{
+    float aBonus = TF_SPEED_GROWTH_PER_FLAG * (float)(mFlag - 1);
+    aBonus = min(aBonus, TF_SPEED_GROWTH_CAP);
+    if (HasMutation(MUTATION_SWIFT))
+        aBonus += 0.25f;
+    return 1.0f + aBonus;
+}
+
+float ThirtyFlags::GetCountScale() const
+{
+    return 1.0f + 0.03f * (float)max(0, mFlag - 9);
+}
+
+float ThirtyFlags::GetZombieDamageScale(Board* theBoard) const
+{
+    float aScale = 1.0f;
+
+    if (HasMutation(MUTATION_RESONANCE) && theBoard)
+    {
+        int aCount = 0;
+        Zombie* aZombie = nullptr;
+        while (theBoard->IterateZombies(aZombie))
+        {
+            if (!aZombie->IsDeadOrDying())
+                aCount++;
+        }
+        aScale += 0.01f * (float)min(aCount, 100);
+    }
+
+    return aScale;
+}
+
+float ThirtyFlags::GetZombieDamageReduction() const
+{
+    return HasMutation(MUTATION_ARMOR) ? 0.15f : 0.0f;
+}
+
+void ThirtyFlags::RollMutation()
+{
+    if (mMutationPicksLeft <= 0)
+        return;
+
+    int aCandidates[NUM_MUTATIONS];
+    int aCount = 0;
+    for (int i = 0; i < NUM_MUTATIONS; i++)
+    {
+        if (!mMutations[i])
+            aCandidates[aCount++] = i;
+    }
+
+    if (aCount == 0)
+    {
+        mMutationPicksLeft = 0;
+        return;
+    }
+
+    mMutations[aCandidates[Rand(aCount)]] = true;
+    mMutationPicksLeft--;
+}
+
+int ThirtyFlags::GetEliteChancePercent() const
+{
+    if (mFlag < TF_ELITE_START_FLAG)
+        return 0;
+
+    return min(15 + (mFlag - TF_ELITE_START_FLAG) * 3, 60);
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 肉鸽强化
+// ----------------------------------------------------------------------------------------------------
+float ThirtyFlags::GetLegendaryAmplifier() const
+{
+    int aStacks = GetStacks(TF_UPG_LEFT_FOOT_RIGHT_FOOT);
+    if (aStacks <= 0)
+        return 1.0f;
+
+    return 1.0f + 0.30f * (float)(mLegendaryCount * aStacks);
+}
+
+int ThirtyFlags::CountRarity(ThirtyFlagsRarity theRarity) const
+{
+    int aCount = 0;
+    for (int i = 0; i < TF_UPG_COUNT; i++)
+    {
+        if (mUpgradeStacks[i] > 0 && gThirtyFlagsUpgradeDefs[i].mRarity == theRarity)
+            aCount += mUpgradeStacks[i];
+    }
+    return aCount;
+}
+
+int ThirtyFlags::CountEconomyUpgrades() const
+{
+    int aCount = 0;
+    aCount += GetStacks(TF_UPG_MASS_PRODUCE);
+    aCount += GetStacks(TF_UPG_ABUNDANCE);
+    aCount += GetStacks(TF_UPG_SIPHON);
+    aCount += GetStacks(TF_UPG_HIGH_YIELD);
+    aCount += GetStacks(TF_UPG_DRAIN);
+    aCount += GetStacks(TF_UPG_COMPOUND_SUN);
+    return aCount;
+}
+
+int ThirtyFlags::GetBonusSeedSlots() const
+{
+    return 2 * GetStacks(TF_UPG_INFINITE);
+}
+
+void ThirtyFlags::RollUpgradeChoices()
+{
+    ThirtyFlagsRarity aAllowed[4];
+    int aWeights[4];
+    int aAllowedCount = 0;
+
+    aAllowed[aAllowedCount] = TF_RARITY_COMMON;     aWeights[aAllowedCount++] = 40;
+    aAllowed[aAllowedCount] = TF_RARITY_RARE;       aWeights[aAllowedCount++] = 30;
+    if (mFlag >= 10)
+    {
+        aAllowed[aAllowedCount] = TF_RARITY_EPIC;
+        aWeights[aAllowedCount++] = (mFlag >= 15) ? 30 : 12;
+    }
+    if (mFlag >= 20)
+    {
+        aAllowed[aAllowedCount] = TF_RARITY_LEGENDARY;
+        aWeights[aAllowedCount++] = 12;
+    }
+
+    for (int aChoice = 0; aChoice < 3; aChoice++)
+    {
+        int aTotal = 0;
+        for (int i = 0; i < aAllowedCount; i++)
+            aTotal += aWeights[i];
+
+        int aRoll = Rand(aTotal);
+        int aAccum = 0;
+        ThirtyFlagsRarity aRarity = aAllowed[0];
+        for (int i = 0; i < aAllowedCount; i++)
+        {
+            aAccum += aWeights[i];
+            if (aRoll < aAccum)
+            {
+                aRarity = aAllowed[i];
+                break;
+            }
+        }
+
+        int aCandidates[TF_UPG_COUNT];
+        int aCount = 0;
+        for (int i = 0; i < TF_UPG_COUNT; i++)
+        {
+            if (gThirtyFlagsUpgradeDefs[i].mRarity == aRarity)
+                aCandidates[aCount++] = i;
+        }
+
+        mPendingUpgradeChoices[aChoice] = (aCount > 0) ? (ThirtyFlagsUpgrade)aCandidates[Rand(aCount)] : TF_UPG_HASTE;
+    }
+}
+
+void ThirtyFlags::GrantUpgrade(ThirtyFlagsUpgrade theUpgrade)
+{
+    if ((int)theUpgrade < 0 || (int)theUpgrade >= TF_UPG_COUNT)
+        return;
+
+    mUpgradeStacks[theUpgrade]++;
+    mUpgradeCount++;
+
+    if (gThirtyFlagsUpgradeDefs[theUpgrade].mRarity == TF_RARITY_LEGENDARY)
+    {
+        mLegendaryCount++;
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 综合战斗系数
+// ----------------------------------------------------------------------------------------------------
+float ThirtyFlags::GetAttackSpeedBonus() const
+{
+    if (!mActive)
+        return 1.0f;
+
+    float aBonus = 0.0f;
+    aBonus += 0.12f * (float)GetStacks(TF_UPG_HASTE);
+    aBonus += 0.08f * (float)(GetStacks(TF_UPG_RESONANCE_HASTE) * GetStacks(TF_UPG_HASTE));
+    aBonus += 0.05f * (float)(GetStacks(TF_UPG_DESPERATION) * mLostLanes);
+    aBonus += 0.50f * (float)GetStacks(TF_UPG_OVERLOADED);
+
+    aBonus *= GetLegendaryAmplifier();
+
+    float aMultiplier = powf(2.0f, (float)GetStacks(TF_UPG_GOD_PEA));
+    return (1.0f + aBonus) * aMultiplier;
+}
+
+float ThirtyFlags::GetDamageBonus() const
+{
+    if (!mActive)
+        return 1.0f;
+
+    float aBonus = 0.0f;
+    aBonus += 0.15f * (float)(GetStacks(TF_UPG_RESONANCE_BARRAGE) * GetStacks(TF_UPG_BARRAGE));
+    aBonus += 0.10f * (float)(GetStacks(TF_UPG_RESONANCE_WEALTH) * CountEconomyUpgrades());
+    aBonus += 0.10f * (float)(GetStacks(TF_UPG_SCAVENGE) * (mTotalKills / 500));
+
+    int aBloodRage = GetStacks(TF_UPG_BLOOD_RAGE);
+    if (aBloodRage > 0)
+    {
+        aBonus += 0.30f * (float)aBloodRage * max(0.0f, GetHealthBonus() - 1.0f);
+    }
+
+    aBonus *= GetLegendaryAmplifier();
+    return 1.0f + aBonus;
+}
+
+float ThirtyFlags::GetHealthBonus() const
+{
+    if (!mActive)
+        return 1.0f;
+
+    float aBonus = 0.35f * (float)GetStacks(TF_UPG_REINFORCE);
+    aBonus -= 0.30f * (float)GetStacks(TF_UPG_OVERLOADED);
+    aBonus *= GetLegendaryAmplifier();
+
+    float aMultiplier = powf(3.0f, (float)GetStacks(TF_UPG_GOD_NUT));
+    return max(0.1f, (1.0f + aBonus) * aMultiplier);
+}
+
+float ThirtyFlags::GetCostScale() const
+{
+    if (!mActive)
+        return 1.0f;
+
+    float aReduction = 0.20f * (float)GetStacks(TF_UPG_MASS_PRODUCE);
+    aReduction *= GetLegendaryAmplifier();
+    return max(0.0f, 1.0f - aReduction);
+}
+
+int ThirtyFlags::GetExtraProjectiles() const
+{
+    if (!mActive)
+        return 0;
+
+    int aExtra = GetStacks(TF_UPG_BARRAGE);
+    int aOverloads = GetStacks(TF_UPG_OVERLOAD);
+    if (aOverloads > 0)
+    {
+        int aHundreds = (int)((GetAttackSpeedBonus() - 1.0f) / 1.0f);
+        aExtra += max(0, aHundreds) * aOverloads;
+    }
+    return aExtra;
+}
+
+float ThirtyFlags::GetArmorPierce() const
+{
+    if (!mActive)
+        return 0.0f;
+    return 0.25f * (float)GetStacks(TF_UPG_ARMORPIERCE) * GetLegendaryAmplifier();
+}
+
+float ThirtyFlags::GetThornsReflect() const
+{
+    if (!mActive)
+        return 0.0f;
+    return 0.20f * (float)GetStacks(TF_UPG_THORNS) * GetLegendaryAmplifier();
+}
+
+float ThirtyFlags::GetSunDropIntervalScale() const
+{
+    if (!mActive)
+        return 1.0f;
+    float aReduction = 0.25f * (float)GetStacks(TF_UPG_ABUNDANCE) * GetLegendaryAmplifier();
+    return max(0.05f, 1.0f - aReduction);
+}
+
+float ThirtyFlags::GetSunflowerYieldBonus() const
+{
+    if (!mActive)
+        return 1.0f;
+    return 1.0f + 0.60f * (float)GetStacks(TF_UPG_HIGH_YIELD) * GetLegendaryAmplifier();
+}
+
+int ThirtyFlags::GetKillSunReward() const
+{
+    if (!mActive)
+        return 0;
+
+    float aReward = 3.0f * (float)GetStacks(TF_UPG_SIPHON);
+    if (mKillStreak > 0)
+    {
+        float aStreakBonus = min(0.015f * (float)mKillStreak, 0.15f);
+        aReward *= (1.0f + aStreakBonus);
+    }
+    return (int)aReward;
+}
+
+float ThirtyFlags::GetDeathRefundRate() const
+{
+    if (!mActive)
+        return 0.0f;
+    return 0.50f * (float)GetStacks(TF_UPG_DRAIN) * GetLegendaryAmplifier();
+}
+
+float ThirtyFlags::GetLilypadSpeedBonus() const
+{
+    return (mActive && GetStacks(TF_UPG_SYMBIOSIS_WATER) > 0) ? 0.30f : 0.0f;
+}
+
+int ThirtyFlags::GetTimeStopSeconds() const
+{
+    if (!mActive)
+        return 0;
+    return 10 * GetStacks(TF_UPG_TIME_STOP);
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 表现层 / 统计
+// ----------------------------------------------------------------------------------------------------
+void ThirtyFlags::UpdateKillStreak()
+{
+    if (mKillStreakTimer > 0)
+    {
+        mKillStreakTimer--;
+        if (mKillStreakTimer == 0)
+        {
+            mKillStreak = 0;
+        }
+    }
+}
+
+void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow)
+{
+    if (!mActive)
+        return;
+
+    mTotalKills++;
+    mKillStreak++;
+    mKillStreakTimer = 100;
+
+    int aSun = GetKillSunReward();
+    if (aSun > 0 && theBoard)
+    {
+        theBoard->AddSunMoney(aSun);
+    }
+
+    if (!theBoard)
+        return;
+
+    if (HasMutation(MUTATION_ZOMBIE_EXPLODE))
+    {
+        theBoard->KillAllPlantsInRadius(theX, theY, 90);
+    }
+
+    if (HasMutation(MUTATION_ZOMBIE_POISON))
+    {
+        TFAddPoison(theBoard->PixelToGridXKeepOnBoard(theX, theY),
+                    theBoard->PixelToGridYKeepOnBoard(theX, theY), 450);
+    }
+
+    if (HasMutation(MUTATION_PROSPER) && Rand(100) < 30)
+    {
+        int aGridY = theRow;
+        if (aGridY < 0 || aGridY >= MAX_GRID_SIZE_Y)
+            aGridY = TFClampI(theBoard->PixelToGridYKeepOnBoard(theX, theY), 0, MAX_GRID_SIZE_Y - 1);
+
+        Zombie* aImp = theBoard->AddZombieInRow(ZOMBIE_IMP, aGridY, theBoard->mCurrentWave);
+        if (aImp)
+        {
+            aImp->mPosX = (float)theX;
+        }
+    }
+
+    if (HasMutation(MUTATION_DIG))
+    {
+        int aGridX = theBoard->PixelToGridXKeepOnBoard(theX, theY);
+        int aGridY = theBoard->PixelToGridYKeepOnBoard(theX, theY);
+        if (aGridX >= 0 && aGridX < MAX_GRID_SIZE_X && aGridY >= 0 && aGridY < MAX_GRID_SIZE_Y)
+        {
+            if (!theBoard->GetCraterAt(aGridX, aGridY) && !theBoard->GetGraveStoneAt(aGridX, aGridY))
+            {
+                GridItem* aCrater = theBoard->AddACrater(aGridX, aGridY);
+                if (aCrater)
+                {
+                    aCrater->mGridItemCounter = 150;
+                }
+            }
+        }
+    }
+}
+
+// ====================================================================================================
+// 钩子实现
+// ====================================================================================================
+
+void ThirtyFlagsInitRun(Board* theBoard)
+{
+    gThirtyFlags.StartRun();
+    ThirtyFlagsSetupBoard(theBoard);
+
+    // 开局已开放的行直接呈现为草皮，不留滚动动画
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
+    {
+        gThirtyFlagsSodProgress[aRow] = gThirtyFlags.IsRowUnlocked(aRow) ? 1000 : 0;
+    }
+    gThirtyFlagsPrevUnlockedRows = gThirtyFlags.mUnlockedRows;
+
+    for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+    {
+        for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
+        {
+            gThirtyFlagsWaterFade[x][y] = gThirtyFlags.IsWaterCell(y, x) ? 100 : 0;
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 场地：按当前旗配置水陆格
+// ----------------------------------------------------------------------------------------------------
+void ThirtyFlagsSetupBoard(Board* theBoard)
+{
+    if (!theBoard)
+        return;
+
+    if (!gThirtyFlags.mActive)
+    {
+        gThirtyFlags.StartRun();
+    }
+
+    for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
+    {
+        bool aUnlocked = gThirtyFlags.IsRowUnlocked(y);
+        bool aWaterRow = gThirtyFlags.IsWaterRow(y);
+
+        if (!aUnlocked)
+        {
+            // 未开放的行：整行不可种植（DIRT 仅作内部标记，视觉由 DrawBackdrop 画黑幕）
+            theBoard->mPlantRow[y] = PLANTROW_DIRT;
+            for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+            {
+                theBoard->mGridSquareType[x][y] = GRIDSQUARE_DIRT;
+            }
+            continue;
+        }
+
+        if (aWaterRow)
+        {
+            theBoard->mPlantRow[y] = PLANTROW_POOL;
+            for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+            {
+                theBoard->mGridSquareType[x][y] = gThirtyFlags.IsWaterCell(y, x) ? GRIDSQUARE_POOL : GRIDSQUARE_GRASS;
+            }
+        }
+        else
+        {
+            theBoard->mPlantRow[y] = PLANTROW_NORMAL;
+            for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+            {
+                theBoard->mGridSquareType[x][y] = GRIDSQUARE_GRASS;
+            }
+        }
+    }
+
+    // 迷雾：右侧 mFogCols 列
+    for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+    {
+        for (int y = 0; y < MAX_GRID_SIZE_Y + 1; y++)
+        {
+            bool aFog = (y < MAX_GRID_SIZE_Y) && gThirtyFlags.IsRowUnlocked(y) && gThirtyFlags.IsFogCell(x);
+            theBoard->mGridCelFog[x][y] = aFog ? 255 : 0;
+        }
+    }
+}
+
+void ThirtyFlagsFlagChanged(Board* theBoard)
+{
+    if (!theBoard)
+        return;
+
+    ThirtyFlagsSetupBoard(theBoard);
+
+    // 整张 180 波表在关卡开始时由 Board::PickZombieWaves 一次建成
+    // （每波白名单按该波所属旗次取），换旗只需把「当前波」推进到下一面旗的起点。
+    theBoard->mCurrentWave = (gThirtyFlags.mFlag - 1) * TF_WAVES_PER_FLAG;
+    theBoard->mZombieCountDown = 1800;
+    theBoard->mZombieCountDownStart = theBoard->mZombieCountDown;
+    theBoard->mZombieHealthToNextWave = -1;
+    theBoard->mZombieHealthWaveStart = 0;
+}
+
+void ThirtyFlagsIntermissionBegin(Board* theBoard)
+{
+    gThirtyFlags.mIntermission = true;
+    gThirtyFlags.mUpgradeChosen = false;
+    gThirtyFlags.mUpgradeDialogShown = false;
+    gThirtyFlags.mPrepTimeStart = TF_PREP_TIME;
+    gThirtyFlags.mPrepTimeLeft = TF_PREP_TIME;
+    gThirtyFlags.mSunAtFlagStart = theBoard ? theBoard->mSunMoney : 0;
+
+    if (gThirtyFlags.mFlag % 5 == 0)
+    {
+        gThirtyFlags.RollMutation();
+    }
+
+    gThirtyFlags.RollUpgradeChoices();
+
+    if (theBoard)
+    {
+        int aStacks = gThirtyFlags.GetStacks(TF_UPG_COMPOUND_SUN);
+        if (aStacks > 0)
+        {
+            int aBonus = (int)((float)theBoard->mSunMoney * 0.15f * (float)aStacks);
+            if (aBonus > 0)
+            {
+                theBoard->AddSunMoney(aBonus);
+            }
+        }
+    }
+}
+
+void ThirtyFlagsAdvanceFlag(Board* theBoard)
+{
+    gThirtyFlags.ApplyFlag(gThirtyFlags.mFlag + 1);
+    gThirtyFlags.mIntermission = false;
+
+    if (theBoard)
+    {
+        theBoard->AddSunMoney(TF_STARTING_SUN);
+    }
+
+    ThirtyFlagsFlagChanged(theBoard);
+}
+
+void ThirtyFlagsIntermissionFinish(Board* theBoard)
+{
+    if (theBoard && gThirtyFlags.mPrepTimeLeft > 0 && gThirtyFlags.mPrepTimeStart > 0)
+    {
+        int aSun = (int)((float)TF_EARLY_SUN_MAX * (float)gThirtyFlags.mPrepTimeLeft / (float)gThirtyFlags.mPrepTimeStart);
+        if (aSun > 0)
+        {
+            theBoard->AddSunMoney(aSun);
+        }
+    }
+
+    gThirtyFlags.mPrepTimeLeft = 0;
+}
+
+float ThirtyFlagsZombiePointsScale(Board* theBoard)
+{
+    if (!ThirtyFlagsMode())
+        return 1.0f;
+
+    return gThirtyFlags.GetCountScale();
+}
+
+int ThirtyFlagsPickZombieWaves(Board* theBoard, int& theWaveCount)
+{
+    if (!theBoard || gLawnApp->mGameMode != GAMEMODE_THIRTY_FLAGS)
+        return 0;
+
+    // 自举：Board::InitLevel 的调用顺序是 PickBackground -> InitZombieWaves(内部会调本函数)
+    // -> ThirtyFlagsInitRun，因此本函数可能早于 InitRun 执行；此时先补一次 StartRun，
+    // 否则 mActive 仍为 false，波次接管会被跳过、mNumWaves 保持未初始化值。
+    if (!gThirtyFlags.mActive)
+    {
+        gThirtyFlags.StartRun();
+    }
+
+    theWaveCount = TF_TOTAL_FLAGS * TF_WAVES_PER_FLAG;
+    return 1;
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 僵尸侧：初始化（数值成长 + 精英词条）
+// ----------------------------------------------------------------------------------------------------
+void ThirtyFlagsZombieInit(Zombie* theZombie)
+{
+    if (!ThirtyFlagsMode() || !theZombie)
+        return;
+
+    if (theZombie->mZombieType == ZOMBIE_BOSS)
+        return;
+
+    if (!theZombie->IsOnBoard())
+        return;
+
+    float aHealthScale = gThirtyFlags.GetHealthScale();
+    if (theZombie->mBodyHealth > 0)
+    {
+        theZombie->mBodyHealth = (int)((float)theZombie->mBodyHealth * aHealthScale);
+        theZombie->mBodyMaxHealth = theZombie->mBodyHealth;
+    }
+    if (theZombie->mHelmHealth > 0)
+    {
+        theZombie->mHelmHealth = (int)((float)theZombie->mHelmHealth * aHealthScale);
+        theZombie->mHelmMaxHealth = theZombie->mHelmHealth;
+    }
+    if (theZombie->mShieldHealth > 0)
+    {
+        theZombie->mShieldHealth = (int)((float)theZombie->mShieldHealth * aHealthScale);
+        theZombie->mShieldMaxHealth = theZombie->mShieldHealth;
+    }
+    if (theZombie->mFlyingHealth > 0)
+    {
+        theZombie->mFlyingHealth = (int)((float)theZombie->mFlyingHealth * aHealthScale);
+        theZombie->mFlyingMaxHealth = theZombie->mFlyingHealth;
+    }
+
+    theZombie->mVelZ = 0.0f;
+    theZombie->mBossMode = 0;
+
+    if (Rand(100) >= gThirtyFlags.GetEliteChancePercent())
+        return;
+
+    int aWanted = 1 + Rand(TF_ELITE_MAX);
+    for (int i = 0; i < aWanted; i++)
+    {
+        TFSetElite(theZombie, Rand(TF_ELITE_KIND_COUNT));
+    }
+
+    if (TFHasElite(theZombie, ELITE_SHIELD))
+    {
+        theZombie->mBossBungeeCounter = 480;
+    }
+    if (TFHasElite(theZombie, ELITE_SPEAR))
+    {
+        theZombie->mBossStompCounter = 300;
+    }
+}
+
+int ThirtyFlagsZombieTakeDamage(Zombie* theZombie, int theDamage, unsigned int theDamageFlags)
+{
+    if (!ThirtyFlagsMode() || !theZombie)
+        return theDamage;
+
+    if (theZombie->mZombieType == ZOMBIE_BOSS)
+        return theDamage;
+
+    int aDamage = theDamage;
+
+    if (TestBit(theDamageFlags, (int)TF_DAMAGE_FROM_PLANT))
+    {
+        aDamage = (int)((float)aDamage * gThirtyFlags.GetDamageBonus());
+
+        float aCritChance = 0.15f * (float)gThirtyFlags.GetStacks(TF_UPG_CRIT) * gThirtyFlags.GetLegendaryAmplifier();
+        bool aForceCrit = (gThirtyFlags.GetStacks(TF_UPG_NEURO_CRIT) > 0);
+        if (aForceCrit || (aCritChance > 0.0f && Rand(10000) < (int)(aCritChance * 10000.0f)))
+        {
+            float aCritMul = 2.0f + (float)gThirtyFlags.GetStacks(TF_UPG_NEURO_CRIT);
+            aDamage = (int)((float)aDamage * aCritMul);
+        }
+    }
+
+    float aPierce = gThirtyFlags.GetArmorPierce();
+    if (aPierce > 0.0f)
+    {
+        aDamage = (int)((float)aDamage * (1.0f + min(aPierce, 1.0f)));
+    }
+
+    if (TFHasElite(theZombie, ELITE_IRONWALL))
+    {
+        aDamage = (int)((float)aDamage * 0.6f);
+    }
+
+    float aReduction = gThirtyFlags.GetZombieDamageReduction();
+    if (aReduction > 0.0f)
+    {
+        aDamage = (int)((float)aDamage * (1.0f - aReduction));
+    }
+
+    return max(1, aDamage);
+}
+
+void ThirtyFlagsZombieKilled(Zombie* theZombie)
+{
+    if (!ThirtyFlagsMode() || !theZombie || !theZombie->mBoard)
+        return;
+
+    if (theZombie->mDead)
+        return;
+
+    int aRow = theZombie->mRow;
+
+    if (TFHasElite(theZombie, ELITE_SPLIT))
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            Zombie* aImp = theZombie->mBoard->AddZombieInRow(ZOMBIE_IMP, aRow, theZombie->mBoard->mCurrentWave);
+            if (aImp)
+            {
+                aImp->mPosX = theZombie->mPosX + (float)(i * 30);
+                aImp->mBodyHealth = max(1, aImp->mBodyMaxHealth / 2);
+            }
+        }
+    }
+
+    gThirtyFlags.OnZombieKilled(theZombie->mBoard, (int)theZombie->mPosX, (int)theZombie->mPosY, aRow);
+}
+
+void ThirtyFlagsZombieAtePlant(Zombie* theZombie)
+{
+    if (!ThirtyFlagsMode() || !theZombie)
+        return;
+
+    if (gThirtyFlags.HasMutation(MUTATION_LIFESTEAL))
+    {
+        int aHeal = max(1, (int)((float)theZombie->mBodyMaxHealth * 0.02f));
+        theZombie->mBodyHealth = min(theZombie->mBodyHealth + aHeal, theZombie->mBodyMaxHealth);
+    }
+}
+
+bool ThirtyFlagsZombieIsBerserk(Zombie* theZombie)
+{
+    if (!ThirtyFlagsMode() || !theZombie || theZombie->mZombieType == ZOMBIE_BOSS)
+        return false;
+
+    if (!TFHasElite(theZombie, ELITE_BERSERK))
+        return false;
+
+    return (theZombie->mBodyHealth * 10 < theZombie->mBodyMaxHealth * 3);
+}
+
+void ThirtyFlagsZombieUpdate(Zombie* theZombie)
+{
+    if (!ThirtyFlagsMode() || !theZombie || theZombie->mZombieType == ZOMBIE_BOSS)
+        return;
+
+    if (theZombie->IsDeadOrDying() || !theZombie->IsOnBoard())
+        return;
+
+    if (TFHasElite(theZombie, ELITE_REGEN) && (theZombie->mZombieAge % 10) == 0)
+    {
+        int aHeal = max(1, (int)((float)theZombie->mBodyMaxHealth * 0.02f));
+        if (theZombie->mBodyHealth < theZombie->mBodyMaxHealth)
+        {
+            theZombie->mBodyHealth = min(theZombie->mBodyHealth + aHeal, theZombie->mBodyMaxHealth);
+        }
+    }
+
+    if (TFHasElite(theZombie, ELITE_SHIELD))
+    {
+        if (theZombie->mBossBungeeCounter > 0)
+        {
+            theZombie->mBossBungeeCounter--;
+        }
+        else
+        {
+            theZombie->mBossBungeeCounter = 480;
+            int aShield = 300 + (int)((float)theZombie->mBodyMaxHealth * 0.10f);
+            theZombie->mBodyHealth = min(theZombie->mBodyHealth + aShield, theZombie->mBodyMaxHealth);
+        }
+    }
+
+    if (TFHasElite(theZombie, ELITE_SPEAR))
+    {
+        if (theZombie->mBossStompCounter != 0)
+        {
+            theZombie->mBossStompCounter += (theZombie->mBossStompCounter > 0) ? -1 : 1;
+            if (theZombie->mBossStompCounter == 0)
+            {
+                theZombie->mBossStompCounter = 300;
+            }
+        }
+        else
+        {
+            Plant* aTarget = theZombie->FindPlantTarget(ZombieAttackType::ATTACKTYPE_CHEW);
+            if (aTarget)
+            {
+                theZombie->mBossStompCounter = -15;
+
+                aTarget->mPlantHealth -= 100;
+                if (aTarget->mPlantHealth <= 0)
+                {
+                    theZombie->mBoard->mPlantsEaten++;
+                    aTarget->Die();
+                }
+
+                int aRenderOrder = Board::MakeRenderOrder(RENDER_LAYER_PROJECTILE, theZombie->mRow, 0);
+                Projectile* aSpear = theZombie->mBoard->AddProjectile(
+                    (int)theZombie->mPosX, (int)theZombie->mPosY + 10, aRenderOrder, theZombie->mRow,
+                    PROJECTILE_CACTUS_SPEAR);
+                if (aSpear)
+                {
+                    aSpear->mWidth = 20;
+                    aSpear->mHeight = 20;
+                    aSpear->mRotation = 0.0f;
+                    aSpear->mRotationSpeed = 0.0f;
+                }
+            }
+            else
+            {
+                theZombie->mBossStompCounter = 60;
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 植物侧
+// ----------------------------------------------------------------------------------------------------
+void ThirtyFlagsPlantInit(Plant* thePlant)
+{
+    if (!ThirtyFlagsMode() || !thePlant)
+        return;
+
+    // ---- 基础值增强（策划案第 6 章）----
+    switch (thePlant->mSeedType)
+    {
+    case SeedType::SEED_WALLNUT:
+    case SeedType::SEED_EXPLODE_O_NUT:
+    case SeedType::SEED_GIANT_WALLNUT:
+        thePlant->mPlantHealth *= 2;          // 4000 -> 8000
+        break;
+    case SeedType::SEED_TALLNUT:
+        thePlant->mPlantHealth *= 2;          // 8000 -> 16000
+        break;
+    case SeedType::SEED_PUMPKINSHELL:
+        thePlant->mPlantHealth *= 2;          // 护甲 4000 -> 8000
+        break;
+    case SeedType::SEED_UMBRELLA:
+        thePlant->mPlantHealth *= 2;
+        break;
+    default:
+        break;
+    }
+
+    // ---- 通用倍率通道 ----
+    if (thePlant->mPlantHealth > 0)
+    {
+        thePlant->mPlantHealth = (int)((float)thePlant->mPlantHealth * gThirtyFlags.GetHealthBonus());
+        thePlant->mPlantMaxHealth = thePlant->mPlantHealth;
+    }
+
+    // 「共生·水路」：睡莲不再挤占卡槽
+    if (thePlant->mSeedType == SeedType::SEED_LILYPAD && gThirtyFlags.GetStacks(TF_UPG_SYMBIOSIS_WATER) > 0)
+    {
+        if (thePlant->mBoard && thePlant->mBoard->mSeedBank)
+        {
+            thePlant->mBoard->mSeedBank->mNumPackets = min(TF_SEED_SLOTS_MAX, thePlant->mBoard->mSeedBank->mNumPackets + 1);
+            thePlant->mBoard->mSeedBank->UpdateWidth();
+        }
+    }
+
+    int aCooldown = gThirtyFlags.GetStacks(TF_UPG_COOLDOWN);
+    if (aCooldown > 0 && thePlant->mLaunchRate > 0)
+    {
+        float aScale = max(0.15f, 1.0f - 0.20f * (float)aCooldown);
+        thePlant->mLaunchRate = max(5, (int)((float)thePlant->mLaunchRate * aScale));
+    }
+}
+
+float ThirtyFlagsPlantLaunchDecrement(Plant* thePlant)
+{
+    if (!ThirtyFlagsMode() || !thePlant)
+        return 1.0f;
+
+    float aSpeed = gThirtyFlags.GetAttackSpeedBonus();
+
+    if (thePlant->IsOnBoard() && thePlant->mBoard)
+    {
+        Plant* aUnder = thePlant->mBoard->GetTopPlantAt(thePlant->mPlantCol, thePlant->mRow, TOPPLANT_ONLY_UNDER_PLANT);
+        if (aUnder && (aUnder->mSeedType == SeedType::SEED_LILYPAD || aUnder->mSeedType == SeedType::SEED_FLOWERPOT))
+        {
+            aSpeed *= (1.0f + gThirtyFlags.GetLilypadSpeedBonus());
+        }
+    }
+
+    return aSpeed;
+}
+
+int ThirtyFlagsPlantExtraProjectiles(Plant* thePlant)
+{
+    if (!ThirtyFlagsMode() || !thePlant)
+        return 0;
+    return gThirtyFlags.GetExtraProjectiles();
+}
+
+void ThirtyFlagsPlantDied(Plant* thePlant)
+{
+    if (!ThirtyFlagsMode() || !thePlant || !thePlant->mBoard)
+        return;
+
+    float aRefundRate = gThirtyFlags.GetDeathRefundRate();
+    if (aRefundRate > 0.0f)
+    {
+        int aCost = Plant::GetCost(thePlant->mSeedType, thePlant->mImitaterType);
+        int aRefund = (int)((float)aCost * aRefundRate);
+        if (aRefund > 0)
+        {
+            thePlant->mBoard->AddSunMoney(aRefund);
+        }
+    }
+
+    // 坚果墙：被啃死后魅惑所有正在啃食它的僵尸
+    if (thePlant->mSeedType == SeedType::SEED_WALLNUT || thePlant->mSeedType == SeedType::SEED_GIANT_WALLNUT ||
+        thePlant->mSeedType == SeedType::SEED_EXPLODE_O_NUT)
+    {
+        int aCharmed = 0;
+        Zombie* aZombie = nullptr;
+        while (thePlant->mBoard->IterateZombies(aZombie))
+        {
+            if (aZombie->IsDeadOrDying() || aZombie->mMindControlled || aZombie->mRow != thePlant->mRow)
+                continue;
+
+            if (fabsf(aZombie->mPosX - (float)thePlant->mX) <= 90.0f)
+            {
+                aZombie->mMindControlled = true;
+                aCharmed++;
+            }
+        }
+
+        if (aCharmed > 0)
+        {
+            thePlant->mBoard->mApp->AddTodParticle((float)thePlant->mX + 40.0f, (float)thePlant->mY + 40.0f,
+                Board::MakeRenderOrder(RENDER_LAYER_PARTICLE, thePlant->mRow, 0), PARTICLE_MIND_CONTROL);
+            thePlant->mBoard->mApp->PlaySample(SOUND_MINDCONTROLLED);
+        }
+    }
+
+    // 叶子保护伞：范围内植物阵亡时消耗自身生命弹开啃食者
+    if (thePlant->mSeedType != SeedType::SEED_UMBRELLA && thePlant->mBoard)
+    {
+        Plant* aUmbrella = thePlant->mBoard->FindUmbrellaPlant(thePlant->mPlantCol, thePlant->mRow);
+        if (aUmbrella && aUmbrella->mPlantHealth > 5)
+        {
+            int aPushed = 0;
+            Zombie* aZombie = nullptr;
+            while (thePlant->mBoard->IterateZombies(aZombie))
+            {
+                if (aZombie->IsDeadOrDying() || aZombie->mRow != thePlant->mRow)
+                    continue;
+
+                if (fabsf(aZombie->mPosX - (float)thePlant->mX) <= 90.0f)
+                {
+                    aZombie->mPosX += 80.0f;
+                    aZombie->TakeDamage(100, 0U);
+                    aZombie->ApplyChill(false);
+                    aPushed++;
+                }
+            }
+
+            if (aPushed > 0)
+            {
+                aUmbrella->mPlantHealth -= 5 * aPushed;
+                if (aUmbrella->mPlantHealth <= 0)
+                {
+                    aUmbrella->Die();
+                }
+            }
+        }
+    }
+
+    int aGodNut = gThirtyFlags.GetStacks(TF_UPG_GOD_NUT);
+    if (aGodNut > 0)
+    {
+        if (thePlant->mSeedType == SeedType::SEED_WALLNUT || thePlant->mSeedType == SeedType::SEED_TALLNUT ||
+            thePlant->mSeedType == SeedType::SEED_PUMPKINSHELL || thePlant->mSeedType == SeedType::SEED_EXPLODE_O_NUT)
+        {
+            thePlant->mBoard->KillAllZombiesInRadius(thePlant->mRow, thePlant->mX, thePlant->mY, 200, 0, false, 0);
+        }
+    }
+}
+
+int ThirtyFlagsSunflowerExtraSun(Plant* thePlant)
+{
+    if (!ThirtyFlagsMode() || !thePlant)
+        return 0;
+
+    float aBonus = gThirtyFlags.GetSunflowerYieldBonus();
+    int aExtra = (int)aBonus - 1;
+    if (aExtra < 0)
+        return 0;
+
+    float aFraction = aBonus - (float)(int)aBonus;
+    if (aFraction > 0.0f && Rand(1000) < (int)(aFraction * 1000.0f))
+    {
+        aExtra++;
+    }
+
+    return aExtra;
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 场地绘制：草皮滚出动画 + 局部水面 + 未开放行黑幕
+// ----------------------------------------------------------------------------------------------------
+// 三十旗场地绘制：未开放行 = 裸土，已开放行 = 草皮（含滚动铺开动画），水行 = 整行水面。
+// 全部使用不拉伸的 DrawImage(img, x, y, srcRect)，绕开 DDImage::StretchBlt。
+//
+// 坐标说明：DrawBackdrop 在 Board 的坐标系里调用，原点被平移了 -BOARD_OFFSET，
+// 因此「客户区 x=0」对应此处的 x=-BOARD_OFFSET。草坪左界 LAWN_XMIN=40 在此处是 260。
+static const int TF_BOARD_OFFSET = 220;
+static const int TF_LAWN_LEFT = 260;          // 草坪左界在 Board 局部坐标里的 x
+static const int TF_ROW_H = 100;              // 日间布局行高
+
+
+void ThirtyFlagsDrawBackdrop(Board* theBoard, Graphics* g)
+{
+    if (!ThirtyFlagsMode() || !theBoard || !g)
+        return;
+
+    const int aBgLeft = -BOARD_OFFSET;
+
+    // ---- 1) 未开放的行：用「未铺草皮」底图的对应条带覆盖，呈现裸土 ----
+    // 两块贴图（BACKGROUND1 / BACKGROUND1UNSODDED）的草坪区域构图一致，唯一差别就是有没有草皮，
+    // 因此按同行同列取条带即可精确对齐，且**不需要拉伸**。
+    if (Sexy::IMAGE_BACKGROUND1UNSODDED != nullptr)
+    {
+        for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < TF_LAWN_ROWS; aRow++)
+        {
+            if (gThirtyFlags.IsRowUnlocked(aRow))
+                continue;
+
+            int aY = theBoard->GridToPixelY(0, aRow);
+            int aSrcX = TF_LAWN_LEFT + BOARD_OFFSET;        // 转回贴图坐标
+            Rect aSrc(aSrcX, aY, MAX_GRID_SIZE_X * 80, TF_ROW_H);
+            g->DrawImage(Sexy::IMAGE_BACKGROUND1UNSODDED, TF_LAWN_LEFT, aY, aSrc);
+        }
+    }
+
+    // ---- 2) 草皮滚动铺开：按进度从左向右揭示 IMAGE_SOD1ROW ----
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < TF_LAWN_ROWS; aRow++)
+    {
+        if (!gThirtyFlags.IsRowUnlocked(aRow))
+            continue;
+
+        int aProgress = gThirtyFlagsSodProgress[aRow];
+        if (aProgress <= 0 || aProgress >= 1000)
+            continue;                       // 未开始 / 已铺完（背景自带草皮）
+
+        if (Sexy::IMAGE_SOD1ROW == nullptr)
+            continue;
+
+        int aY = theBoard->GridToPixelY(0, aRow);
+        int aFullWidth = Sexy::IMAGE_SOD1ROW->GetWidth();
+        int aWidth = (int)((float)aFullWidth * (float)aProgress / 1000.0f);
+        if (aWidth <= 0)
+            continue;
+
+        Rect aSrcRect(0, 0, aWidth, Sexy::IMAGE_SOD1ROW->GetHeight());
+        g->DrawImage(Sexy::IMAGE_SOD1ROW, TF_LAWN_LEFT - 40, aY, aSrcRect);
+    }
+
+    // ---- 3) 水路：整行铺 IMAGE_POOL ----
+    if (gThirtyFlags.mWaterRows != 0 && Sexy::IMAGE_POOL != nullptr &&
+        Sexy::IMAGE_POOL->GetWidth() > 0 && Sexy::IMAGE_POOL->GetHeight() > 0)
+    {
+        int aPoolW = Sexy::IMAGE_POOL->GetWidth();
+        int aPoolH = Sexy::IMAGE_POOL->GetHeight();
+
+        for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < TF_LAWN_ROWS; aRow++)
+        {
+            if (!gThirtyFlags.IsWaterRow(aRow))
+                continue;
+
+            int aY = theBoard->GridToPixelY(0, aRow);
+            g->DrawImage(Sexy::IMAGE_POOL, TF_LAWN_LEFT - 30, aY - 5, Rect(0, 0, aPoolW, aPoolH));
+        }
+    }
+}
+
+void ThirtyFlagsUpdateSod(Board* theBoard)
+{
+    if (!ThirtyFlagsMode() || !theBoard)
+        return;
+
+    // 检测新解锁的行 -> 启动滚动
+    int aUnlocked = gThirtyFlags.mUnlockedRows;
+    int aNewly = aUnlocked & ~gThirtyFlagsPrevUnlockedRows;
+    if (aNewly != 0)
+    {
+        for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < 5; aRow++)
+        {
+            if (aNewly & (1 << aRow))
+            {
+                gThirtyFlagsSodProgress[aRow] = 1;
+            }
+        }
+        gThirtyFlagsPrevUnlockedRows = aUnlocked;
+    }
+
+    // 推进动画
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < 5; aRow++)
+    {
+        if (gThirtyFlagsSodProgress[aRow] > 0 && gThirtyFlagsSodProgress[aRow] < 1000)
+        {
+            gThirtyFlagsSodProgress[aRow] = min(1000, gThirtyFlagsSodProgress[aRow] + 25);
+        }
+    }
+
+    // 水格淡入
+    for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+    {
+        for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
+        {
+            int aTarget = gThirtyFlags.IsWaterCell(y, x) ? 100 : 0;
+            if (gThirtyFlagsWaterFade[x][y] < aTarget)
+            {
+                gThirtyFlagsWaterFade[x][y] = min(aTarget, gThirtyFlagsWaterFade[x][y] + 5);
+            }
+            else if (gThirtyFlagsWaterFade[x][y] > aTarget)
+            {
+                gThirtyFlagsWaterFade[x][y] = max(aTarget, gThirtyFlagsWaterFade[x][y] - 5);
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+// 场地每帧
+// ----------------------------------------------------------------------------------------------------
+void ThirtyFlagsBoardUpdate(Board* theBoard)
+{
+    if (!ThirtyFlagsMode() || !theBoard)
+        return;
+
+    ThirtyFlagsUpdateSod(theBoard);
+    gThirtyFlags.UpdateKillStreak();
+
+    if (gThirtyFlags.mIntermission && gThirtyFlags.mPrepTimeLeft > 0)
+    {
+        gThirtyFlags.mPrepTimeLeft--;
+    }
+
+    // 整备阶段且场上已清空时，弹出肉鸽强化三选一
+    if (gThirtyFlags.mIntermission && !gThirtyFlags.mUpgradeChosen && !gThirtyFlags.mUpgradeDialogShown)
+    {
+        bool aAnyZombie = false;
+        Zombie* aCheck = nullptr;
+        while (theBoard->IterateZombies(aCheck))
+        {
+            if (!aCheck->IsDeadOrDying())
+            {
+                aAnyZombie = true;
+                break;
+            }
+        }
+
+        if (!aAnyZombie)
+        {
+            gThirtyFlags.mUpgradeDialogShown = true;
+            theBoard->mApp->NewDialog(Dialogs::DIALOG_THIRTY_FLAGS, true, _S(""), _S(""), _S(""), Dialog::BUTTONS_NONE);
+        }
+    }
+
+    int aStopFrames = gThirtyFlags.GetTimeStopSeconds() * 10;
+    bool aTimeStopped = (aStopFrames > 0) && (theBoard->mMainCounter < aStopFrames);
+
+    float aGlobalSpeed = gThirtyFlags.GetSpeedScale();
+
+    Zombie* aZombie = nullptr;
+    while (theBoard->IterateZombies(aZombie))
+    {
+        if (aZombie->IsDeadOrDying() || aZombie->mZombieType == ZOMBIE_BOSS)
+            continue;
+
+        float aMul = aGlobalSpeed;
+        if (TFHasElite(aZombie, ELITE_SWIFT))
+        {
+            aMul *= 1.60f;
+        }
+
+        float aPrev = aZombie->mVelZ;
+        if (aPrev <= 0.01f)
+            aPrev = 1.0f;
+
+        if (aZombie->mVelX > 0.0f)
+        {
+            aZombie->mVelX = (aZombie->mVelX / aPrev) * aMul;
+        }
+        aZombie->mVelZ = aMul;
+
+        if (aTimeStopped)
+        {
+            aZombie->mVelX = 0.0f;
+        }
+
+        ThirtyFlagsZombieUpdate(aZombie);
+    }
+
+    // 投矛清理
+    {
+        Projectile* aProjectile = nullptr;
+        while (theBoard->IterateProjectiles(aProjectile))
+        {
+            if (aProjectile->mProjectileType == PROJECTILE_CACTUS_SPEAR && aProjectile->mPosX < 20.0f)
+            {
+                aProjectile->mDead = true;
+            }
+        }
+    }
+
+    // 尸毒
+    bool aHasPoison = false;
+    for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+    {
+        for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
+        {
+            if (gThirtyFlagsPoison[x][y] > 0)
+            {
+                gThirtyFlagsPoison[x][y]--;
+                aHasPoison = true;
+            }
+        }
+    }
+
+    if (aHasPoison && (theBoard->mMainCounter % 25) == 0)
+    {
+        Plant* aPlant = nullptr;
+        while (theBoard->IteratePlants(aPlant))
+        {
+            if (aPlant->mPlantCol < 0 || aPlant->mPlantCol >= MAX_GRID_SIZE_X ||
+                aPlant->mRow < 0 || aPlant->mRow >= MAX_GRID_SIZE_Y)
+                continue;
+
+            if (gThirtyFlagsPoison[aPlant->mPlantCol][aPlant->mRow] > 0)
+            {
+                aPlant->mPlantHealth -= 4;
+                if (aPlant->mPlantHealth <= 0)
+                {
+                    theBoard->mPlantsEaten++;
+                    aPlant->Die();
+                }
+            }
+        }
+    }
+}
