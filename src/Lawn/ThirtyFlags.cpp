@@ -942,7 +942,7 @@ void ThirtyFlagsSetupBoard(Board* theBoard)
 }
 
 void ThirtyFlagsFlagChanged(Board* theBoard)
-{
+{	// v5: mSurvivalStage is THE single source of truth for flag (see ThirtyFlagsCurrentFlag).	// Sync it from the loaded save BEFORE any setup, otherwise the field builds from flag 1.	if (theBoard && theBoard->mChallenge)	{		theBoard->mChallenge->mSurvivalStage = gThirtyFlags.mFlag - 1;	}
     if (!theBoard)
         return;
 

@@ -1418,10 +1418,9 @@ void Board::InitLevel()
 	PickBackground();
 	InitZombieWaves();
 
-	if (mApp->mGameMode == GameMode::GAMEMODE_THIRTY_FLAGS)
-	{
-		ThirtyFlagsInitRun(this);
-	}
+	// ThirtyFlags v5: InitRun moved to AFTER mChallenge->InitLevel() (end of InitLevel) ¡ª
+	// it used to run here, before mSunMoney = TF_STARTING_SUN and before mChallenge->InitLevel()
+	// reset mSurvivalStage to 0, so the loaded save (sun / flag / rows / plants) got wiped right after restore.
 
 	if (aGameMode == GameMode::GAMEMODE_THIRTY_FLAGS)
 	{
@@ -1614,6 +1613,13 @@ void Board::InitLevel()
 		mFogOffset = 1065 - LeftFogColumn() * 80;
 	}
 	mChallenge->InitLevel();
+
+	// ThirtyFlags v5: run InitRun last ¡ª after mChallenge->InitLevel() (which resets mSurvivalStage)
+	// and after the mSunMoney init above. Loading the save here actually sticks.
+	if (mApp->mGameMode == GameMode::GAMEMODE_THIRTY_FLAGS)
+	{
+		ThirtyFlagsInitRun(this);
+	}
 }
 
 Reanimation* Board::CreateRakeReanim(float theRakeX, float theRakeY, int theRenderOrder)
