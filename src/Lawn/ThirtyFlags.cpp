@@ -13,6 +13,8 @@
 #include "../SexyAppFramework/Common.h"
 #include "../SexyAppFramework/Graphics.h"
 #include "../TodLib/EffectSystem.h"
+static Board* gTFSaveBoard = nullptr;   // ThirtyFlags: board snapshot for saving plants/sun
+static bool gTFJustLoaded = false;      // ThirtyFlags: suppress autosave right after load (plants not restored yet)
 static void ThirtyFlagsSaveProgress();
 static bool ThirtyFlagsLoadProgress();
 

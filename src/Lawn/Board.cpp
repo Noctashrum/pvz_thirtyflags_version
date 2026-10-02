@@ -8069,6 +8069,16 @@ void Board::KeyChar(SexyChar theChar)
 		return;
 	}
 
+	// 【三十旗】Backspace / Delete：清除三十旗存档并从头重开（防止死档把人卡死）
+	if ((theChar == 0x08 || theChar == 0x7F) && ThirtyFlagsMode() && mSeedBank != nullptr && !mPaused)
+	{
+		remove("thirtyflags_save.ini");
+		ThirtyFlagsShowCenterText(StrFormat(_S("------ 存档已清除：从第 1 面旗重来 ------")),
+			Sexy::Color(255, 90, 30), 180);
+		mApp->PreNewGame(GameMode::GAMEMODE_THIRTY_FLAGS, false);
+		return;
+	}
+
 	// 【三十旗】`（反引号）拿起铲子；右键取消（原版行为）
 	if ((theChar == _S('`') || theChar == 0xB7) && mSeedBank != nullptr && !mPaused)
 	{
