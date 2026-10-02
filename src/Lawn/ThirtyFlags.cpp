@@ -20,6 +20,7 @@ static bool gTFSaveRestored = false;  // v5: a save was found and restored
 static int  gTFSavedSun = -1;         // v5: sun value read from save
 static int  gTFDeadCol[64], gTFDeadRow[64], gTFDeadSeed[64];   // NIRVANA: plants lost last flag
 static int  gTFDeadCount = 0;
+static void TFRestorePlants(Board* theBoard);
 static void ThirtyFlagsSaveProgress();
 static bool ThirtyFlagsLoadProgress();
 
