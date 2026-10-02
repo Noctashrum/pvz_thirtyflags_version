@@ -2145,7 +2145,6 @@ void Zombie::UpdateZombieGargantuar()
         Reanimation* aBodyReanim = mApp->ReanimationGet(mBodyReanimID);
         if (aBodyReanim->ShouldTriggerTimedEvent(0.64f))
         {
-#ifdef DO_FIX_BUGS
             if (mMindControlled)  // ÷È»ó¾ÞÈËÔÒ½©Ê¬
             {
                 Zombie* aZombie = FindZombieTarget();
@@ -2194,44 +2193,6 @@ void Zombie::UpdateZombieGargantuar()
                     }
                 }
             }
-#else
-            Plant* aPlant = FindPlantTarget(ZombieAttackType::ATTACKTYPE_CHEW);
-            if (aPlant)
-            {
-                if (aPlant->mSeedType == SeedType::SEED_SPIKEROCK)
-                {
-                    TakeDamage(20, 32U);
-                    aPlant->SpikeRockTakeDamage();
-                    if (aPlant->mPlantHealth <= 0)
-                    {
-                        SquishAllInSquare(aPlant->mPlantCol, aPlant->mRow, ZombieAttackType::ATTACKTYPE_CHEW);
-                    }
-                }
-                else
-                {
-                    SquishAllInSquare(aPlant->mPlantCol, aPlant->mRow, ZombieAttackType::ATTACKTYPE_CHEW);
-                }
-            }
-
-            if (mApp->IsScaryPotterLevel())
-            {
-                int aGridX = mBoard->PixelToGridX(mPosX, mPosY);
-                GridItem* aScaryPot = mBoard->GetScaryPotAt(aGridX, mRow);
-                if (aScaryPot)
-                {
-                    mBoard->mChallenge->ScaryPotterOpenPot(aScaryPot);
-                }
-            }
-
-            if (mApp->IsIZombieLevel())
-            {
-                GridItem* aBrain = mBoard->mChallenge->IZombieGetBrainTarget(this);
-                if (aBrain)
-                {
-                    mBoard->mChallenge->IZombieSquishBrain(aBrain);
-                }
-            }
-#endif
 
             mApp->PlayFoley(FoleyType::FOLEY_THUMP);
             mBoard->ShakeBoard(0, 3);
@@ -2257,7 +2218,11 @@ void Zombie::UpdateZombieGargantuar()
             ReanimShowTrack("Zombie_gargantuar_whiterope", RENDER_GROUP_HIDDEN);
             mApp->PlayFoley(FoleyType::FOLEY_SWING);
 
-            Zombie* aZombieImp = mBoard->AddZombie(ZombieType::ZOMBIE_IMP, mFromWave);
+            if (mMindControlled)   // v5: a mind-controlled gargantuar must not throw hostile imps
+    {
+        return;
+    }
+    Zombie* aZombieImp = mBoard->AddZombie(ZombieType::ZOMBIE_IMP, mFromWave);
             if (aZombieImp == nullptr)
                 return;
             
@@ -2283,7 +2248,6 @@ void Zombie::UpdateZombieGargantuar()
             aZombieImp->mAltitude = 88.0f;
             aZombieImp->mRenderOrder = mRenderOrder + 1;
             aZombieImp->mZombiePhase = ZombiePhase::PHASE_IMP_GETTING_THROWN;
-#ifdef DO_FIX_BUGS
             aZombieImp->mScaleZombie = mScaleZombie;
             aZombieImp->mBodyHealth *= mScaleZombie * mScaleZombie;
             aZombieImp->mBodyMaxHealth *= mScaleZombie * mScaleZombie;
@@ -2298,9 +2262,6 @@ void Zombie::UpdateZombieGargantuar()
             {
                 aZombieImp->mVelX = 3.0f;
             }
-#else
-            aZombieImp->mVelX = 3.0f;
-#endif
             aZombieImp->mChilledCounter = mChilledCounter;
             aZombieImp->mVelZ = 0.5f * (aThrowingDistance / aZombieImp->mVelX) * THOWN_ZOMBIE_GRAVITY;
             aZombieImp->PlayZombieReanim("anim_thrown", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 0, 18.0f);
@@ -2331,13 +2292,11 @@ void Zombie::UpdateZombieGargantuar()
     }
 
     bool doSmash = false;
-#ifdef DO_FIX_BUGS
     if (mMindControlled)
     {
         doSmash = FindZombieTarget();
     }
     else
-#endif
     {
 
         if (FindPlantTarget(ZombieAttackType::ATTACKTYPE_CHEW))
@@ -2423,7 +2382,6 @@ void Zombie::UpdateZombiePeaHead()
 
         float aOriginX = mPosX + aTransform.mTransX - 9.0f;
         float aOriginY = mPosY + aTransform.mTransY + 6.0f - mAltitude;
-#ifdef DO_FIX_BUGS
         if (mMindControlled)  // ÷È»óÐÞ¸´
         {
             aOriginX += 90.0f * mScaleZombie;
@@ -2435,10 +2393,6 @@ void Zombie::UpdateZombiePeaHead()
             Projectile* aProjectile = mBoard->AddProjectile(aOriginX, aOriginY, mRenderOrder, mRow, ProjectileType::PROJECTILE_ZOMBIE_PEA);
             aProjectile->mMotionType = ProjectileMotion::MOTION_BACKWARDS;
         }
-#else
-        Projectile* aProjectile = mBoard->AddProjectile(aOriginX, aOriginY, mRenderOrder, mRow, ProjectileType::PROJECTILE_ZOMBIE_PEA);
-        aProjectile->mMotionType = ProjectileMotion::MOTION_BACKWARDS;
-#endif
 
         mPhaseCounter = 150;
     }
@@ -2485,7 +2439,6 @@ void Zombie::UpdateZombieJalapenoHead()
         mBoard->DoFwoosh(mRow);
         mBoard->ShakeBoard(3, -4);
         
-#ifdef DO_FIX_BUGS
         if (mMindControlled)
         {
             BurnRow(mRow);
@@ -2503,18 +2456,6 @@ void Zombie::UpdateZombieJalapenoHead()
                 }
             }
         }
-#else
-        Plant* aPlant = nullptr;
-        while (mBoard->IteratePlants(aPlant))
-        {
-            //Rect aPlantRect = aPlant->GetPlantRect();
-            if (aPlant->mRow == mRow && !aPlant->NotOnGround())
-            {
-                mBoard->mPlantsEaten++;
-                aPlant->Die();
-            }
-        }
-#endif
 
         DieNoLoot();
     }
@@ -2542,7 +2483,6 @@ void Zombie::UpdateZombieGatlingHead()
 
         float aOriginX = mPosX + aTransform.mTransX - 9.0f;
         float aOriginY = mPosY + aTransform.mTransY + 6.0f;
-#ifdef DO_FIX_BUGS
         if (mMindControlled)  // ÷È»óÐÞ¸´
         {
             aOriginX += 90.0f * mScaleZombie;
@@ -2554,10 +2494,6 @@ void Zombie::UpdateZombieGatlingHead()
             Projectile* aProjectile = mBoard->AddProjectile(aOriginX, aOriginY, mRenderOrder, mRow, ProjectileType::PROJECTILE_ZOMBIE_PEA);
             aProjectile->mMotionType = ProjectileMotion::MOTION_BACKWARDS;
         }
-#else
-        Projectile* aProjectile = mBoard->AddProjectile(aOriginX, aOriginY, mRenderOrder, mRow, ProjectileType::PROJECTILE_ZOMBIE_PEA);
-        aProjectile->mMotionType = ProjectileMotion::MOTION_BACKWARDS;
-#endif
     }
     else if (mPhaseCounter == 0)
     {
@@ -2594,7 +2530,6 @@ void Zombie::UpdateZombieSquashHead()
     if (mZombiePhase == ZombiePhase::PHASE_SQUASH_RISING)
     {
         int aDestX = mBoard->GridToPixelX(mBoard->PixelToGridXKeepOnBoard(mX, mY), mRow);
-#ifdef DO_FIX_BUGS
         if (mMindControlled)
         {
             Zombie* aZombie = FindZombieTarget();
@@ -2607,7 +2542,6 @@ void Zombie::UpdateZombieSquashHead()
                 aDestX += 90.0f * mScaleZombie;
             }
         }
-#endif
         int aPosX = TodAnimateCurve(50, 20, mPhaseCounter, 0, aDestX - mPosX, TodCurves::CURVE_EASE_IN_OUT);
         int aPosY = TodAnimateCurve(50, 20, mPhaseCounter, 0, -20, TodCurves::CURVE_EASE_IN_OUT);
 
@@ -2627,7 +2561,6 @@ void Zombie::UpdateZombieSquashHead()
     {
         int aPosY = TodAnimateCurve(10, 0, mPhaseCounter, -20, 74, TodCurves::CURVE_LINEAR);
         int aDestX = mBoard->GridToPixelX(mBoard->PixelToGridXKeepOnBoard(mX, mY), mRow);
-#ifdef DO_FIX_BUGS
         if (mMindControlled)
         {
             Zombie* aZombie = FindZombieTarget();
@@ -2640,14 +2573,12 @@ void Zombie::UpdateZombieSquashHead()
                 aDestX += 90.0f * mScaleZombie;
             }
         }
-#endif
 
         Reanimation* aHeadReanim = mApp->ReanimationGet(mSpecialHeadReanimID);
         aHeadReanim->SetPosition(mPosX + 6.0f + aDestX - mPosX, mPosY - 21.0f + aPosY);
         
         if (mPhaseCounter == 2)
         {
-#ifdef DO_FIX_BUGS
             if (mMindControlled)  // ÷È»óÐÞ¸´
             {
                 Rect aAttackRect(aDestX - 73, mPosY + 4, 65, 90);  // ¾ßÌåÊýÖµÎ´Êµ²â£¬´ý¶¨
@@ -2669,9 +2600,6 @@ void Zombie::UpdateZombieSquashHead()
             {
                 SquishAllInSquare(mBoard->PixelToGridXKeepOnBoard(mX, mY), mRow, ZombieAttackType::ATTACKTYPE_CHEW);
             }
-#else
-            SquishAllInSquare(mBoard->PixelToGridXKeepOnBoard(mX, mY), mRow, ZombieAttackType::ATTACKTYPE_CHEW);
-#endif
         }
 
         if (mPhaseCounter == 0)

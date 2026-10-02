@@ -970,7 +970,7 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
         {
             LawnMower* aNewMower = theBoard->mLawnMowers.DataArrayAlloc();
             aNewMower->LawnMowerInitialize(aRow);
-            aNewMower->mVisible = false;
+            aNewMower->mVisible = true;   // v5: visible
         }
     }
 
