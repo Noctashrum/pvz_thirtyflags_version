@@ -96,6 +96,11 @@ constexpr int   TF_CORRUPT_DURATION     = 600;  // 每层持续帧数（6 秒，可刷新）
 constexpr int   TF_CORRUPT_SLOW_PERCENT = 12;   // 每层减速 %（4 层 = -48%）
 constexpr int   TF_HARVEST_CORRUPT_PCT  = 200;  // 猫尾草对「腐化」目标的伤害 %（×2）
 constexpr int   TF_HARVEST_ELITE_PCT    = 150;  // 猫尾草对精英僵尸的伤害 %（×1.5）
+
+// 【三十旗·平衡】突变「尸爆」：对半径内植物**造成伤害**（原实现是无条件秒杀 + 零特效，
+// 玩家只会看到植物凭空消失）。8000 血的坚果/南瓜应该扛得住一次尸爆。
+constexpr int   TF_EXPLODE_DAMAGE       = 500;  // 尸爆对半径内每株植物的伤害
+constexpr int   TF_EXPLODE_RADIUS       = 90;   // 尸爆半径（像素，约 1.1 格）
 constexpr int   TF_BURST_MAX            = 12;    // 处决爆发环并发上限
 constexpr int   TF_BURST_LIFE           = 30;    // 处决爆发环存活帧数
 constexpr int   TF_FREEZE_MAX_FRAMES    = 12;    // 单次顿帧上限（帧，只冻结表现层）

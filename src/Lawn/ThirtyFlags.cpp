@@ -832,7 +832,37 @@ void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow
 
     if (HasMutation(MUTATION_ZOMBIE_EXPLODE))
     {
-        theBoard->KillAllPlantsInRadius(theX, theY, 90);
+        // 【三十旗·平衡】尸爆原本是 KillAllPlantsInRadius(90) —— 也就是**无条件秒杀**
+        // 半径内所有植物，而且**一点特效都没有**。后果是玩家看到「植物莫名其妙消失」，
+        // 以为是 bug（实测反馈过）。现在改成：
+        //   1) 先放爆炸粒子（可见）
+        //   2) 再按固定伤害结算（8000 血的坚果/南瓜扛得住）
+        //   3) 落日志，便于排查「植物为什么没了」
+        int aRenderOrder = Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, theRow, 0);
+        theBoard->mApp->AddTodParticle((float)theX, (float)theY, aRenderOrder, ParticleEffect::PARTICLE_JACKEXPLODE);
+
+        int aKilled = 0;
+        Plant* aBlast = nullptr;
+        while (theBoard->IteratePlants(aBlast))
+        {
+            if (!GetCircleRectOverlap(theX, theY, TF_EXPLODE_RADIUS, aBlast->GetPlantRect()))
+                continue;
+
+            aBlast->mPlantHealth -= TF_EXPLODE_DAMAGE;
+            if (aBlast->mPlantHealth <= 0)
+            {
+                theBoard->mPlantsEaten++;
+                aBlast->Die();
+                aKilled++;
+            }
+        }
+
+        {
+            char aBuf[160];
+            sprintf(aBuf, "[TFPlant] explode at px=(%d,%d) dmg=%d killed=%d",
+                theX, theY, TF_EXPLODE_DAMAGE, aKilled);
+            TFLog(aBuf);
+        }
     }
 
     if (HasMutation(MUTATION_ZOMBIE_POISON))
@@ -1895,6 +1925,32 @@ void ThirtyFlagsDrawVisuals(Sexy::Graphics* g)
     if (!ThirtyFlagsMode() || !g)
         return;
 
+    // 【三十旗·平衡】尸毒潭：之前只有伤害、**完全没有绘制**，玩家看不到毒在哪，
+    // 只会看到植物掉血甚至消失。这里补一个半透明毒潭 + 呼吸环。
+    {
+        Board* aPoolBoard = gLawnApp ? gLawnApp->mBoard : nullptr;
+        if (aPoolBoard)
+        {
+            for (int aCol = 0; aCol < MAX_GRID_SIZE_X; aCol++)
+            {
+                for (int aPoolRow = 0; aPoolRow < MAX_GRID_SIZE_Y; aPoolRow++)
+                {
+                    int aFrames = gThirtyFlagsPoison[aCol][aPoolRow];
+                    if (aFrames <= 0)
+                        continue;
+
+                    int aPx = aPoolBoard->GridToPixelX(aCol, aPoolRow);
+                    int aPy = aPoolBoard->GridToPixelY(aCol, aPoolRow);
+                    int anAlpha = min(130, 50 + aFrames / 5);
+
+                    g->SetColor(Sexy::Color(80, 190, 60, anAlpha));
+                    g->FillRect(aPx + 8, aPy + 18, 64, 66);
+                    TFDrawRing(g, aPx + 40, aPy + 52, 30.0f, Sexy::Color(160, 255, 120, anAlpha));
+                }
+            }
+        }
+    }
+
     // 【三十旗】处决爆发环（策划案 7.7）：精英 / 巨人僵尸阵亡处的扩散冲击环
     for (int i = 0; i < gTFBurstCount; i++)
     {
@@ -2718,6 +2774,10 @@ static void TFBossDoSlam(Board* theBoard, Zombie* theBoss, int theRow)
 
     int aPixelX = theBoard->GridToPixelX(aMinCol, theRow);
     int aPixelY = theBoard->GridToPixelY(aMinCol, theRow);
+    // 【三十旗】砸击也要有可见反馈，
+    // 否则整块植物闪掉也是「凭空消失」。
+    theBoard->mApp->AddTodParticle((float)aPixelX, (float)aPixelY,
+        Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, theRow, 0), ParticleEffect::PARTICLE_BLASTMARK);
     theBoard->KillAllPlantsInRadius(aPixelX, aPixelY, 60);
     theBoard->mApp->PlayFoley(FOLEY_THUNDER);
 }
@@ -2751,7 +2811,13 @@ static void TFBossDoTerrain(Board* theBoard, int theRow)
 
         Plant* aPlant = theBoard->GetTopPlantAt(aC, theRow, TOPPLANT_ANY);
         if (aPlant && !aPlant->mDead && aPlant->mSeedType != SEED_LILYPAD && aPlant->mSeedType != SEED_TANGLEKELP)
+        {
+            // 【三十旗】淹死的植物也要有可见反馈（否则又是一个「凭空消失」）
+            int aSplashOrder = Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, theRow, 0);
+            theBoard->mApp->AddTodParticle((float)theBoard->GridToPixelX(aC, theRow),
+                (float)theBoard->GridToPixelY(aC, theRow), aSplashOrder, ParticleEffect::PARTICLE_POOL_SPLASH);
             aPlant->Die();
+        }
     }
 
     gThirtyFlags.mWaterRows |= (1 << theRow);
@@ -2782,7 +2848,12 @@ static void TFBossDoRoarUltimate(Board* theBoard)
     {
         Plant* aPlant = theBoard->GetTopPlantAt(aFrontCol, aR, TOPPLANT_ANY);
         if (aPlant && !aPlant->mDead)
+        {
+            // 【三十旗】整列植物被摧毁也要有反馈，否则像「整列凭空消失」。
+            theBoard->mApp->AddTodParticle((float)aPlant->mX, (float)aPlant->mY,
+                Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, aR, 0), ParticleEffect::PARTICLE_BLASTMARK);
             aPlant->Die();
+        }
     }
     theBoard->mApp->PlayFoley(FOLEY_THUNDER);
 }
@@ -3339,6 +3410,12 @@ void ThirtyFlagsBoardUpdate(Board* theBoard)
                 {
                     theBoard->mPlantsEaten++;
                     aPlant->Die();
+                    {
+                        char aBuf[160];
+                        sprintf(aBuf, "[TFPlant] poison killed plant %d at (%d,%d)",
+                            (int)aPlant->mSeedType, aPlant->mPlantCol, aPlant->mRow);
+                        TFLog(aBuf);
+                    }
                 }
             }
         }
