@@ -3027,6 +3027,15 @@ PlantingReason Board::CanPlantAt(int theGridX, int theGridY, SeedType theSeedTyp
 				}
 			}
 
+			// 【三十旗·平衡】紫卡（升级卡）的例外只有猫尾草：
+			// 其余升级卡即便在南瓜格/阳光菇格里能叠种，也必须真的找到可升级的目标 ——
+			// 否则就等于「所有紫卡都能直接种」，把原版的紫卡限制整个绕过去。
+			// 上面那轮扫描没有 return，就说明同格没有可升级的目标。
+			if (Plant::IsUpgrade(theSeedType) && theSeedType != SeedType::SEED_CATTAIL)
+			{
+				return PlantingReason::PLANTING_NEEDS_UPGRADE;
+			}
+
 			int aSameCell = 0;
 			Plant* aScanPlant = nullptr;
 			while (IteratePlants(aScanPlant))
@@ -4042,7 +4051,11 @@ void Board::MouseDownWithPlant(int x, int y, int theClickCount)
 			aRightPlant->Die();
 		}
 	}
-	if (aPlantingSeedType == SeedType::SEED_CATTAIL)
+	// 【三十旗】猫尾草在三十旗里是普通植物，不该再顶掉同格植物。
+	// 原版猫尾草是「睡莲升级」，种下来会把睡莲和上面那株植物一起清掉；
+	// 三十旗里它已经解除了睡莲前置，应该像叠种那样叠上去。
+	// （睡莲 → 猫尾草的真升级由上面的 aUpgradeTarget 分支处理）
+	if (aPlantingSeedType == SeedType::SEED_CATTAIL && !ThirtyFlagsMode())
 	{
 		if (aPlantOnLawn.mUnderPlant)
 		{
