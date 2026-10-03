@@ -1015,7 +1015,7 @@ void GameSelector::KeyChar(SexyChar theChar)
 	{
 		mStartingGame = true;
 		mApp->KillGameSelector();
-		mApp->PreNewGame(GameMode::GAMEMODE_THIRTY_FLAGS, false);
+		mApp->PreNewGame(GameMode::GAMEMODE_THIRTY_FLAGS, true);
 		return;
 	}
 

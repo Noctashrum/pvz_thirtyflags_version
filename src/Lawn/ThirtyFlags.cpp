@@ -13,16 +13,20 @@
 #include "../SexyAppFramework/Common.h"
 #include "../SexyAppFramework/Graphics.h"
 #include "../TodLib/EffectSystem.h"
-static Board* gTFSaveBoard = nullptr;   // ThirtyFlags: board snapshot for saving plants/sun
-static bool gTFJustLoaded = false;      // ThirtyFlags: suppress autosave right after load (plants not restored yet)
-static bool gTFSavePending = true;    // v5: save not yet restored (bootstrap in SetupBoard)
-static bool gTFSaveRestored = false;  // v5: a save was found and restored
-static int  gTFSavedSun = -1;         // v5: sun value read from save
 static int  gTFDeadCol[64], gTFDeadRow[64], gTFDeadSeed[64];   // NIRVANA: plants lost last flag
 static int  gTFDeadCount = 0;
-static void TFRestorePlants(Board* theBoard);
-static void ThirtyFlagsSaveProgress();
-static bool ThirtyFlagsLoadProgress();
+
+// -------------------------------------------------------------------------------------------
+// [ThirtyFlags] run save -- full design notes in section "RUN SAVE" at the bottom of this file.
+//   Board state (grid / plants / sun / mowers / wave table / Challenge::mSurvivalStage) is
+//   stored by the ORIGINAL pipeline:
+//     Board::TryToSaveGame() -> LawnSaveGame() -> userdata/game<mode>_<profile>.dat
+//     LawnApp::PreNewGame(mode,true) -> TryLoadGame() -> Board::LoadGame()
+//   The roguelite layer (upgrade stacks / mutations / intermission) lives outside Board on
+//   purpose -- Board's layout is frozen because SyncBoard writes it as one raw block -- and is
+//   appended to the save as a small sidecar "<savefile>.tf".
+// -------------------------------------------------------------------------------------------
+constexpr int TF_SAVE_MAGIC = 0x7F01;
 
 
 #include <math.h>
@@ -864,12 +868,7 @@ void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow
 
 void ThirtyFlagsInitRun(Board* theBoard)
 {
-    // v5: 每次新开一局都要重新允许恢复存档（否则「重新开始」时门闩已用掉，存档不生效）
-    gTFSavePending = true;
-    gTFSaveRestored = false;
-    gTFSavedSun = -1;
     gThirtyFlags.StartRun();
-    // v5: 存档恢复已自举到 ThirtyFlagsSetupBoard（见该函数开头）    ThirtyFlagsSetupBoard(theBoard);
 
     // 开局已开放的行直接呈现为草皮，不留滚动动画
     for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
@@ -883,49 +882,6 @@ void ThirtyFlagsInitRun(Board* theBoard)
         for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
         {
             gThirtyFlagsWaterFade[x][y] = gThirtyFlags.IsWaterCell(y, x) ? 100 : 0;
-    // v5: 阳光恢复（TF_STARTING_SUN 赋值在本函数之前执行，此处覆盖才不会被重置）
-    if (gTFSaveRestored && theBoard && gTFSavedSun >= 0)
-        theBoard->mSunMoney = gTFSavedSun;
-
-    // v5: 植物恢复放在这里（关卡初始化完成之后，Board 已完全就绪）
-    if (gTFSaveRestored && theBoard)
-        TFRestorePlants(theBoard);
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------------------------------
-// 场地：按当前旗配置水陆格
-// ----------------------------------------------------------------------------------------------------
-static void TFRestorePlants(Board* theBoard)
-{
-    FILE* f = fopen("thirtyflags_save.ini", "r");
-    if (!f) return;
-    char aLine[128];
-    int aPlantCount = 0;
-    int aCol[64], aRow[64], aSeed[64], aImit[64], aHp[64];
-    int aGot = 0;
-    while (fgets(aLine, sizeof(aLine), f))
-    {
-        int v1;
-        if (sscanf(aLine, "plants=%d", &v1) == 1) aPlantCount = v1;
-        else if (sscanf(aLine, "p %d %d %d %d %d", &aCol[aGot], &aRow[aGot], &aSeed[aGot], &aImit[aGot], &aHp[aGot]) == 5)
-        {
-            if (aGot < 64) aGot++;
-        }
-    }
-    fclose(f);
-    for (int k = 0; k < aGot && k < aPlantCount; k++)
-    {
-        if (aCol[k] < 0 || aCol[k] >= MAX_GRID_SIZE_X || aRow[k] < 0 || aRow[k] >= MAX_GRID_SIZE_Y)
-            continue;
-        if (!gThirtyFlags.IsRowUnlocked(aRow[k]))
-            continue;
-        Plant* aNewPlant = theBoard->AddPlant(aCol[k], aRow[k], (SeedType)aSeed[k], (SeedType)aImit[k]);
-        if (aNewPlant && aHp[k] > 0)
-        {
-            aNewPlant->mPlantHealth = aHp[k];
-            aNewPlant->mPlantMaxHealth = aHp[k];
         }
     }
 }
@@ -934,20 +890,6 @@ void ThirtyFlagsSetupBoard(Board* theBoard)
 {
     if (!theBoard)
         return;
-    // v5: 自举恢复存档——无论 SetupBoard 由谁调用（InitLevel / 选卡后），第一次都先恢复存档，
-    // 否则选卡后的再次铺场会按重置后的旗次覆盖掉恢复结果。
-    if (gTFSavePending && ThirtyFlagsMode() && theBoard)
-    {
-        gTFSavePending = false;
-        gTFSaveRestored = ThirtyFlagsLoadProgress();
-        if (gTFSaveRestored)
-        {
-            if (theBoard->mChallenge)
-                theBoard->mChallenge->mSurvivalStage = gThirtyFlags.mFlag - 1;
-            // 植物恢复不在这里做：SetupBoard 可能在 Board 尚未初始化完成时被调用，
-            // 此时 AddPlant 会崩溃。改到 ThirtyFlagsInitRun 末尾（关卡初始化完成后）。
-        }
-    }
 
 
     if (!gThirtyFlags.mActive)
@@ -1001,7 +943,7 @@ void ThirtyFlagsSetupBoard(Board* theBoard)
 }
 
 void ThirtyFlagsFlagChanged(Board* theBoard)
-{	// v5: mSurvivalStage is THE single source of truth for flag (see ThirtyFlagsCurrentFlag).	// Sync it from the loaded save BEFORE any setup, otherwise the field builds from flag 1.	if (theBoard && theBoard->mChallenge)	{		theBoard->mChallenge->mSurvivalStage = gThirtyFlags.mFlag - 1;	}
+{
     if (!theBoard)
         return;
 
@@ -1100,9 +1042,6 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
         }
     }
 
-    // ThirtyFlags v5: save progress on every flag change (board snapshot included)
-    gTFSaveBoard = theBoard;
-    ThirtyFlagsSaveProgress();
 }
 
 void ThirtyFlagsIntermissionBegin(Board* theBoard)
@@ -2162,48 +2101,171 @@ static void ThirtyFlagsTickMarks()
 }
 
 // -------------------------------------------------------------------------------------------
-// 【三十旗】旗间进度存档（用户需求：不用每次从头打）——
-// 换旗时自动保存（旗次 + 强化池），三十旗开局时自动恢复并直接从存档旗次开始。
-// 文件：Release/thirtyflags_save.ini；删除该文件 = 从第 1 面旗重新开始。
+// [ThirtyFlags] RUN SAVE
+//
+// The original game already persists everything this mode needs:
+//   * Board::UpdateLevelEndSequence() calls TryToSaveGame() at mNextSurvivalStageCounter == 1
+//     whenever LawnApp::IsSurvivalMode() is true -- and IsSurvivalMode() returns true for
+//     GAMEMODE_THIRTY_FLAGS -- so a snapshot is written every time a flag is cleared.
+//   * SyncBoard() serializes the whole Board from mPaused onwards: grid squares (dirt / grass /
+//     pool), fog, plant rows, plants, sun, lawn mowers, the 180-slot wave table, the seed bank,
+//     plus the Challenge struct. Challenge::mSurvivalStage is the single source of truth for the
+//     flag number, so the flag survives the round trip for free.
+//   * LawnApp::PreNewGame(mode, true) -> TryLoadGame() -> Board::LoadGame() restores all of it and
+//     then shows the original ContinueDialog ("continue / new game").
+//
+// What is NOT in Board is the roguelite layer: upgrade stacks, mutations and the intermission
+// state. Board's layout cannot be extended (SyncBoard writes it as one raw block), so that layer
+// goes into a small sidecar written immediately after LawnSaveGame and read immediately after
+// LawnLoadGame. Both files live in AppData/userdata and die together.
 // -------------------------------------------------------------------------------------------
-static void ThirtyFlagsSaveProgress()
+static std::string TFGetExtraPath()
 {
-    FILE* f = fopen("thirtyflags_save.ini", "w");
-    if (!f) return;
-    fprintf(f, "flag=%d\n", gThirtyFlags.mFlag);
-    fprintf(f, "upgcount=%d\n", gThirtyFlags.mUpgradeCount);
-    for (int i = 0; i < TF_UPG_COUNT; i++)
-    {
-        if (gThirtyFlags.mUpgradeStacks[i] > 0)
-            fprintf(f, "u %d %d\n", i, gThirtyFlags.mUpgradeStacks[i]);
-    }
-    fclose(f);
+    LawnApp* aApp = gLawnApp;
+    if (!aApp || !aApp->mPlayerInfo)
+        return std::string();
+    return GetSavedGameName(GameMode::GAMEMODE_THIRTY_FLAGS, aApp->mPlayerInfo->mId) + ".tf";
 }
 
-static bool ThirtyFlagsLoadProgress()
+void ThirtyFlagsOnSaveGame(Board* theBoard)
 {
-    FILE* f = fopen("thirtyflags_save.ini", "r");
-    if (!f) return false;
-    char aLine[128];
-    bool aFound = false;
+    if (!theBoard || !ThirtyFlagsMode())
+        return;
+
+    std::string aPath = TFGetExtraPath();
+    if (aPath.empty())
+        return;
+
+    FILE* aFile = fopen(aPath.c_str(), "wb");
+    if (!aFile)
+        return;
+
+    int aMagic = TF_SAVE_MAGIC;
+    fwrite(&aMagic, sizeof(aMagic), 1, aFile);
+    fwrite(&gThirtyFlags.mFlag, sizeof(int), 1, aFile);
+    fwrite(&gThirtyFlags.mMutationPicksLeft, sizeof(int), 1, aFile);
+    fwrite(gThirtyFlags.mMutations, sizeof(bool), NUM_MUTATIONS, aFile);
+    fwrite(gThirtyFlags.mUpgradeStacks, sizeof(int), TF_UPG_COUNT, aFile);
+    fwrite(&gThirtyFlags.mLegendaryCount, sizeof(int), 1, aFile);
+    fwrite(&gThirtyFlags.mIntermission, sizeof(bool), 1, aFile);
+    fwrite(&gThirtyFlags.mUpgradeChosen, sizeof(bool), 1, aFile);
+    fwrite(&gThirtyFlags.mPrepTimeLeft, sizeof(int), 1, aFile);
+    fwrite(&gThirtyFlags.mPrepTimeStart, sizeof(int), 1, aFile);
+    fwrite(&gThirtyFlags.mSunAtFlagStart, sizeof(int), 1, aFile);
+    fwrite(&gThirtyFlags.mTotalKills, sizeof(int), 1, aFile);
+    fwrite(&gThirtyFlags.mLostLanes, sizeof(int), 1, aFile);
+    fwrite(&gThirtyFlags.mBossPhase, sizeof(int), 1, aFile);
+    fwrite(&gTFDeadCount, sizeof(int), 1, aFile);
+    if (gTFDeadCount > 0)
+    {
+        fwrite(gTFDeadCol, sizeof(int), gTFDeadCount, aFile);
+        fwrite(gTFDeadRow, sizeof(int), gTFDeadCount, aFile);
+        fwrite(gTFDeadSeed, sizeof(int), gTFDeadCount, aFile);
+    }
+    fwrite(gThirtyFlagsPoison, sizeof(gThirtyFlagsPoison), 1, aFile);
+    fclose(aFile);
+}
+
+void ThirtyFlagsOnLoadGame(Board* theBoard)
+{
+    if (!theBoard || !gLawnApp)
+        return;
+    if (gLawnApp->mGameMode != GameMode::GAMEMODE_THIRTY_FLAGS)
+        return;
+
+    // Board / plants / sun / mowers / grid / wave table / mSurvivalStage are already restored by
+    // SyncBoard. This path never runs Board::InitLevel(), so ThirtyFlagsInitRun() never runs --
+    // rebuild the run object here or every ThirtyFlags hook would see a dead state.
+    gThirtyFlags.mActive = true;
+    gThirtyFlags.ApplyFlag(ThirtyFlagsCurrentFlag(theBoard));
+
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
+        gThirtyFlagsSodProgress[aRow] = gThirtyFlags.IsRowUnlocked(aRow) ? 1000 : 0;
+    gThirtyFlagsPrevUnlockedRows = gThirtyFlags.mUnlockedRows;
+    for (int x = 0; x < MAX_GRID_SIZE_X; x++)
+        for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
+            gThirtyFlagsWaterFade[x][y] = gThirtyFlags.IsWaterCell(y, x) ? 100 : 0;
+
+    memset(gThirtyFlagsPoison, 0, sizeof(gThirtyFlagsPoison));
+    gThirtyFlags.mBossPtr = NULL;
+    gThirtyFlags.mBossPhase = 0;
+    gThirtyFlags.mIntermission = false;
+    gThirtyFlags.mUpgradeChosen = false;
+    gThirtyFlags.mUpgradeDialogShown = false;
+    gTFDeadCount = 0;
+
+    std::string aPath = TFGetExtraPath();
+    FILE* aFile = aPath.empty() ? nullptr : fopen(aPath.c_str(), "rb");
+    if (!aFile)
+    {
+        TFLog("load: no .tf sidecar, resuming with a bare flag");
+        return;
+    }
+
+    int aMagic = 0;
+    int aGot = (int)fread(&aMagic, sizeof(aMagic), 1, aFile);
+    if (aGot != 1 || aMagic != TF_SAVE_MAGIC)
+    {
+        fclose(aFile);
+        TFLog("load: bad .tf sidecar magic");
+        return;
+    }
+
+    int aFlag = 0;
+    aGot += (int)fread(&aFlag, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mMutationPicksLeft, sizeof(int), 1, aFile);
+    aGot += (int)fread(gThirtyFlags.mMutations, sizeof(bool), NUM_MUTATIONS, aFile);
+    aGot += (int)fread(gThirtyFlags.mUpgradeStacks, sizeof(int), TF_UPG_COUNT, aFile);
+    aGot += (int)fread(&gThirtyFlags.mLegendaryCount, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mIntermission, sizeof(bool), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mUpgradeChosen, sizeof(bool), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mPrepTimeLeft, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mPrepTimeStart, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mSunAtFlagStart, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mTotalKills, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mLostLanes, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gThirtyFlags.mBossPhase, sizeof(int), 1, aFile);
+    aGot += (int)fread(&gTFDeadCount, sizeof(int), 1, aFile);
+    if (gTFDeadCount < 0 || gTFDeadCount > 64)
+        gTFDeadCount = 0;
+    if (gTFDeadCount > 0)
+    {
+        aGot += (int)fread(gTFDeadCol, sizeof(int), gTFDeadCount, aFile);
+        aGot += (int)fread(gTFDeadRow, sizeof(int), gTFDeadCount, aFile);
+        aGot += (int)fread(gTFDeadSeed, sizeof(int), gTFDeadCount, aFile);
+    }
+    aGot += (int)fread(gThirtyFlagsPoison, sizeof(gThirtyFlagsPoison), 1, aFile);
+    fclose(aFile);
+
     gThirtyFlags.mUpgradeCount = 0;
     for (int i = 0; i < TF_UPG_COUNT; i++)
-        gThirtyFlags.mUpgradeStacks[i] = 0;
-    while (fgets(aLine, sizeof(aLine), f))
+        gThirtyFlags.mUpgradeCount += gThirtyFlags.mUpgradeStacks[i];
+
+    // A dialog cannot survive the reload, so let the upgrade prompt come back.
+    if (gThirtyFlags.mIntermission && !gThirtyFlags.mUpgradeChosen)
+        gThirtyFlags.mUpgradeDialogShown = false;
+
     {
-        int aFlag, aCount, aIdx, aStacks, v1;
-        if (sscanf(aLine, "flag=%d", &aFlag) == 1)      { gThirtyFlags.mFlag = aFlag; aFound = true; }
-        else if (sscanf(aLine, "upgcount=%d", &aCount) == 1) gThirtyFlags.mUpgradeCount = aCount;
-        else if (sscanf(aLine, "sun=%d", &v1) == 1) gTFSavedSun = v1;
-        else if (sscanf(aLine, "u %d %d", &aIdx, &aStacks) == 2)
-        {
-            if (aIdx >= 0 && aIdx < TF_UPG_COUNT) gThirtyFlags.mUpgradeStacks[aIdx] = aStacks;
-        }
+        char aBuf[128];
+        sprintf(aBuf, "load: flag %d, upgrades %d, intermission %d", ThirtyFlagsCurrentFlag(theBoard),
+            gThirtyFlags.mUpgradeCount, (int)gThirtyFlags.mIntermission);
+        TFLog(aBuf);
     }
-    fclose(f);
-    if (gThirtyFlags.mFlag < 1) gThirtyFlags.mFlag = 1;
-    if (gThirtyFlags.mFlag > 30) gThirtyFlags.mFlag = 30;
-    return aFound;
+    ThirtyFlagsShowCenterText(StrFormat(_S("------ 继续：第 %d 面旗 ------"), ThirtyFlagsCurrentFlag(theBoard)),
+        Sexy::Color(255, 200, 60), 180);
+}
+
+void ThirtyFlagsClearSave()
+{
+    LawnApp* aApp = gLawnApp;
+    if (!aApp || !aApp->mPlayerInfo)
+        return;
+    if (aApp->mGameMode != GameMode::GAMEMODE_THIRTY_FLAGS)
+        return;
+
+    std::string aBase = GetSavedGameName(GameMode::GAMEMODE_THIRTY_FLAGS, aApp->mPlayerInfo->mId);
+    aApp->EraseFile(aBase);
+    aApp->EraseFile(aBase + ".tf");
 }
 
 int ThirtyFlagsRollFireballElement(int theFrame)
@@ -2681,14 +2743,26 @@ static void TFBossExecuteSkill(Board* theBoard, Zombie* theBoss, int theSkill, i
 static Zombie* TFBossResolve(Board* theBoard)
 {
     Zombie* aCached = gThirtyFlags.mBossPtr;
-    if (!aCached)
-        return NULL;
-
-    for (unsigned int i = 0; i < theBoard->mZombies.mMaxUsedCount; i++)
+    if (aCached)
     {
-        Zombie* aSlot = &theBoard->mZombies.mBlock[i].mItem;
-        if (aSlot == aCached && (theBoard->mZombies.mBlock[i].mID & DATA_ARRAY_INDEX_MASK) != DATA_ARRAY_INDEX_MASK)
-            return aCached->mDead ? NULL : aCached;
+        for (unsigned int i = 0; i < theBoard->mZombies.mMaxUsedCount; i++)
+        {
+            Zombie* aSlot = &theBoard->mZombies.mBlock[i].mItem;
+            if (aSlot == aCached && (theBoard->mZombies.mBlock[i].mID & DATA_ARRAY_INDEX_MASK) != DATA_ARRAY_INDEX_MASK)
+                return aCached->mDead ? NULL : aCached;
+        }
+    }
+
+    // [ThirtyFlags] After a save reload every entity pointer is stale, so fall back to a scan.
+    // Without this the boss would be lost and re-summoned as a second one on flag 30.
+    Zombie* aZombie = nullptr;
+    while (theBoard->IterateZombies(aZombie))
+    {
+        if (aZombie->mZombieType == ZOMBIE_BOSS && !aZombie->mDead)
+        {
+            gThirtyFlags.mBossPtr = aZombie;
+            return aZombie;
+        }
     }
     return NULL;
 }

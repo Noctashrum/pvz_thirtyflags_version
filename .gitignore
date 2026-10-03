@@ -38,6 +38,9 @@ Release/crash.txt
 Release/pvzdebug.ini
 Release/save/
 Release/userdata/
+# 三十旗的存档写在系统 AppData\...\userdata\ 下，不入库；
+# 下面这条是早期自研 INI 存档的遗留文件（现已被原版 SaveGame 通路取代）
+Release/thirtyflags_save.ini
 
 # ---- 内部策划 / 设计文档（不对外发布）----
 植物大战僵尸三十旗_1-1改版策划案.docx

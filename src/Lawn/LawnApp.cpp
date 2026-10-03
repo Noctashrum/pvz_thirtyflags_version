@@ -936,6 +936,7 @@ void LawnApp::PreNewGame(GameMode theGameMode, bool theLookForSavedGame)
 
 	std::string aFileName = GetSavedGameName(mGameMode, mPlayerInfo->mId);
 	EraseFile(aFileName);
+	ThirtyFlagsClearSave();   // [ThirtyFlags] the run-state sidecar dies with the board save
 	NewGame();
 }
 
@@ -1008,6 +1009,7 @@ bool LawnApp::TryLoadGame()
 		if (mBoard->LoadGame(aSaveName))
 		{
 			mFirstTimeGameSelector = false;
+			ThirtyFlagsOnLoadGame(mBoard);   // [ThirtyFlags] rebuild the run state (InitLevel never runs here)
 			DoContinueDialog();
 			return true;
 		}
@@ -2467,7 +2469,7 @@ void LawnApp::ButtonDepress(int theId)
 			KillDialog(Dialogs::DIALOG_TF_ENTER);
 			// 【三十旗】GameMode::GAMEMODE_THIRTY_FLAGS 枚举值 = 71（pvzdebug.log
 			// 26 次三十旗会话全部 mode=71 实锤——73 是 GAMEMODE_INTRO 启动动画，勿混淆）
-			PreNewGame(GameMode::GAMEMODE_THIRTY_FLAGS, false);
+			PreNewGame(GameMode::GAMEMODE_THIRTY_FLAGS, true);
 			return;
 
 		case Dialogs::DIALOG_CONFIRM_BACK_TO_MAIN:

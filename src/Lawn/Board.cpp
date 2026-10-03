@@ -320,6 +320,7 @@ void Board::TryToSaveGame()
 		MkDir(GetAppDataFolder() + "userdata");
 		mApp->mMusic->GameMusicPause(true);
 		LawnSaveGame(this, aFileName);
+		ThirtyFlagsOnSaveGame(this);   // [ThirtyFlags] append the roguelite layer
 		mApp->ClearUpdateBacklog();
 		SurvivalSaveScore();
 	}
@@ -8085,7 +8086,7 @@ void Board::KeyChar(SexyChar theChar)
 	// 【三十旗】Backspace / Delete：清除三十旗存档并从头重开（防止死档把人卡死）
 	if ((theChar == 0x08 || theChar == 0x7F) && ThirtyFlagsMode() && mSeedBank != nullptr && !mPaused)
 	{
-		remove("thirtyflags_save.ini");
+		ThirtyFlagsClearSave();   // [ThirtyFlags] board save + run-state sidecar
 		ThirtyFlagsShowCenterText(StrFormat(_S("------ 存档已清除：从第 1 面旗重来 ------")),
 			Sexy::Color(255, 90, 30), 180);
 		mApp->PreNewGame(GameMode::GAMEMODE_THIRTY_FLAGS, false);

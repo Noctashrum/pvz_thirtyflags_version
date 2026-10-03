@@ -356,6 +356,13 @@ void    ThirtyFlagsFlagChanged(Board* theBoard);
 void    ThirtyFlagsIntermissionBegin(Board* theBoard);
 void    ThirtyFlagsIntermissionFinish(Board* theBoard);
 void    ThirtyFlagsAdvanceFlag(Board* theBoard);
+
+// --------------------------------------------------------------------------------------------
+// Run save -- built on the ORIGINAL LawnSaveGame / LawnLoadGame pipeline (see "RUN SAVE" in .cpp)
+// --------------------------------------------------------------------------------------------
+void    ThirtyFlagsOnSaveGame(Board* theBoard);   // called right after LawnSaveGame()
+void    ThirtyFlagsOnLoadGame(Board* theBoard);   // called right after a successful Board::LoadGame()
+void    ThirtyFlagsClearSave();                   // delete the board save + the run-state sidecar
 int     ThirtyFlagsPickZombieWaves(Board* theBoard, int& theWaveCount);
 float   ThirtyFlagsZombiePointsScale(Board* theBoard);
 int     ThirtyFlagsWavePoints(int theWaveIndex);
