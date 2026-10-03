@@ -59,6 +59,16 @@ constexpr int   TF_SHOT_BONUS_THREEPEA  = 16;    // 三线 +80%
 constexpr int   TF_SHOT_BONUS_SPLITPEA  = 10;    // 裂荚
 constexpr int   TF_SHOT_BONUS_STARFRUIT = 10;    // 杨桃 +50%
 constexpr int   TF_SHOT_BONUS_CACTUS    = 20;    // 仙人掌 +100%
+// 【三十旗·平衡】忧郁菇 / 猫尾草 专项加强
+//
+// 这两个植物的强度主要来自机制（忧郁菇「孢子腐化」、猫尾草「收割」，见下方常量），
+// 所以基础数值只给 3~4 倍，避免机制叠数值叠过头：
+//   忧郁菇：原版每次孢子 20 伤害、200 帧一轮 4 次（≈40 DPS，范围 5 行）-> ≈120 DPS + 腐化
+//   猫尾草：原版每发 20 伤害、每 50 帧一发（≈40 DPS 单体追踪）-> ≈160 DPS + 破绽标记 + 收割
+// 想再调强度，只改这两个数字即可。
+constexpr int   TF_GLOOM_PUFF_DAMAGE    = 60;   // 忧郁菇单次孢子 20 -> 60（≈120 DPS 范围伤害）
+constexpr int   TF_SHOT_BONUS_CATTAIL   = 60;   // 猫尾草额外弹伤 20 -> 80（≈160 DPS 单体追踪）
+
 constexpr int   TF_PIERCE_PEA           = 1;
 // ---- 元素火球（策划案 6.2「随机多倍火球」扩展版）：火炬点燃豌豆时随机附加元素 ----
 constexpr int   TF_ELEM_NONE            = 0;
@@ -78,6 +88,14 @@ constexpr int   TF_TALLNUT_SPIKE_DAMAGE = 20;    // vanilla spikeweed per-hit da
 constexpr unsigned int TF_DMGFLAG_POISON = (1u << 10);
 constexpr unsigned int TF_DMGFLAG_ICEELEM = (1u << 11);
 constexpr unsigned int TF_DMGFLAG_FIRE   = (1u << 13);
+
+// 【三十旗·平衡】忧郁菇「孢子腐化」+ 猫尾草「收割」
+// 用户需求：这两个植物不能只靠数值，要各有一条真机制，而且要能处理精英「再生」。
+constexpr int   TF_CORRUPT_MAX_STACKS   = 4;    // 腐化最大层数
+constexpr int   TF_CORRUPT_DURATION     = 600;  // 每层持续帧数（6 秒，可刷新）
+constexpr int   TF_CORRUPT_SLOW_PERCENT = 12;   // 每层减速 %（4 层 = -48%）
+constexpr int   TF_HARVEST_CORRUPT_PCT  = 200;  // 猫尾草对「腐化」目标的伤害 %（×2）
+constexpr int   TF_HARVEST_ELITE_PCT    = 150;  // 猫尾草对精英僵尸的伤害 %（×1.5）
 constexpr int   TF_BURST_MAX            = 12;    // 处决爆发环并发上限
 constexpr int   TF_BURST_LIFE           = 30;    // 处决爆发环存活帧数
 constexpr int   TF_FREEZE_MAX_FRAMES    = 12;    // 单次顿帧上限（帧，只冻结表现层）
@@ -395,6 +413,9 @@ void    ThirtyFlagsUpdateSod(Board* theBoard);
 int     ThirtyFlagsRollFireballElement(int theFrame);
 bool    ThirtyFlagsHasFlagZombieAlive(Board* theBoard);
 void    ThirtyFlagsAddMark(Zombie* theZombie, Board* theBoard);
+void    ThirtyFlagsAddCorrupt(Zombie* theZombie, Board* theBoard);
+int     ThirtyFlagsGetCorrupt(Zombie* theZombie, Board* theBoard);
+int     ThirtyFlagsHarvestPercent(Zombie* theZombie, Board* theBoard);
 int     ThirtyFlagsGetMark(Zombie* theZombie, Board* theBoard);   // 战旗光环：场上是否有旗帜僵尸
 // 在 (col,row) 处放置尸毒潭（毒伤火球用；包装 ThirtyFlags.cpp 内部毒表）
 void    ThirtyFlagsAddPoisonAt(int theCol, int theRow, int theFrames);   // 动态草皮滚动 + 水格淡入（每帧推进）                       // 绘制（Board::Draw 调用）

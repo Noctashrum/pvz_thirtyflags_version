@@ -552,6 +552,13 @@ void DrawSeedPacket(Graphics* g, float x, float y, SeedType theSeedType, SeedTyp
 				aCostStr = StrFormat(_S("%d+"), Plant::GetCost(theSeedType, theImitaterType));
 			}
 		}
+		else if (gLawnApp->mBoard && theUseCurrentCost)
+		{
+			// 【三十旗】卡面显示实际费用：三十旗有费用缩放、南瓜头还有 -50%，
+			// 原来这里恒用 Plant::GetCost（原价），玩家看到 125 实际只扣 62，
+			// 会以为「南瓜头套种费用减半」没生效。
+			aCostStr = StrFormat(_S("%d"), gLawnApp->mBoard->GetCurrentPlantCost(theSeedType, theImitaterType));
+		}
 		else
 		{
 			aCostStr = StrFormat(_S("%d"), Plant::GetCost(theSeedType, theImitaterType));

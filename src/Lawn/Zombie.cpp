@@ -2223,10 +2223,16 @@ if (aBodyReanim->ShouldTriggerTimedEvent(0.74f))
             ReanimShowTrack("Zombie_gargantuar_whiterope", RENDER_GROUP_HIDDEN);
             mApp->PlayFoley(FoleyType::FOLEY_SWING);
 
-            if (mMindControlled)   // v5: a mind-controlled gargantuar must not throw hostile imps
-    {
-        return;
-    }
+            if (mMindControlled)
+            {
+                // 【三十旗】魅惑巨人一颗小鬼都不扔（用户要求：不能把敌对小鬼扔进玩家家里）。
+                // 但绝不能在这里直接 return
+                // ——那会跳过下面 mLoopCount > 0 的收尾，巨人永远停在 THROWING 状态。
+                // 表现就是「打到半血之后卡在原地一动不动」。
+                mZombiePhase = ZombiePhase::PHASE_ZOMBIE_NORMAL;
+                StartWalkAnim(20);
+                return;
+            }
     Zombie* aZombieImp = mBoard->AddZombie(ZombieType::ZOMBIE_IMP, mFromWave);
             if (aZombieImp == nullptr)
                 return;
@@ -2286,7 +2292,10 @@ if (aBodyReanim->ShouldTriggerTimedEvent(0.74f))
     if (IsImmobilizied() || !mHasHead)
         return;
     
-    if (mHasObject && mBodyHealth < mBodyMaxHealth / 2 && aThrowingDistance > 40.0f)
+    // 【三十旗·平衡】魅惑巨人不能扔出敌对小鬼：
+    //   1) 直接禁止它进入投掷状态（否则会在下面的收尾里永久卡死）；
+    // 2) 万一还有别的路径把它推进 THROWING，收尾里也要自己把状态收回来。
+    if (mHasObject && !mMindControlled && mBodyHealth < mBodyMaxHealth / 2 && aThrowingDistance > 40.0f)
     {
         mZombiePhase = ZombiePhase::PHASE_GARGANTUAR_THROWING;
         // 【三十旗·平衡】巨人扔小鬼前摇拉长：举起动画速率 24 -> 8（前摇时长 ×3），

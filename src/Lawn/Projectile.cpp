@@ -831,6 +831,13 @@ void Projectile::DoImpact(Zombie* theZombie)
 			ThirtyFlagsGetMark(theZombie, mBoard) > 0)
 			aBaseDmg += GetProjectileDef().mDamage / 2;
 
+		// 【三十旗·平衡】猫尾草「收割」：带破绽标记的刺
+		// 对腐化目标 ×2、对精英 ×1.5（两者叠加 ×3）
+		if (mProjectileType == ProjectileType::PROJECTILE_SPIKE && mElement == TF_ELEM_MARK)
+		{
+			aBaseDmg = aBaseDmg * ThirtyFlagsHarvestPercent(theZombie, mBoard) / 100;
+		}
+
 		// 【三十旗·平衡 v5】魅惑火球纯控：不造成直伤（是火球强不是魅惑强——削弱火球而非魅惑机制）
 		if (mElement != TF_ELEM_CHARM)
 			theZombie->TakeDamage(aBaseDmg, aDamageFlags);

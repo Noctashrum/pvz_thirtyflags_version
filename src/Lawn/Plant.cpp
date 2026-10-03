@@ -4908,7 +4908,8 @@ void Plant::Fire(Zombie* theTargetZombie, int theRow, PlantWeapon thePlantWeapon
     }
     if (mSeedType == SeedType::SEED_GLOOMSHROOM)
     {
-        DoRowAreaDamage(20, 2U | (1u << 8));
+        // 【三十旗·平衡】忧郁菇专项加强：单次孢子 20 -> TF_GLOOM_PUFF_DAMAGE（见 ThirtyFlags.h）
+        DoRowAreaDamage(ThirtyFlagsMode() ? TF_GLOOM_PUFF_DAMAGE : 20, 2U | (1u << 8));
         return;
     }
     if (mSeedType == SeedType::SEED_STARFRUIT)
@@ -5129,8 +5130,8 @@ void Plant::Fire(Zombie* theTargetZombie, int theRow, PlantWeapon thePlantWeapon
     // 【三十旗】豌豆连续命中穿透（策划案 6.1）
     aProjectile->mPierceLeft = ThirtyFlagsPlantPierce((int)mSeedType);
 
-    // ThirtyFlags balance v5: peashooter = fuse. Its pea carries the break-mark.
-    if (ThirtyFlagsMode() && mSeedType == SeedType::SEED_PEASHOOTER)
+    // 【三十旗·平衡】猫尾草：刺同样带「破绽」标记，并对腐化/精英有额外收割伤害（见 ThirtyFlagsHarvestPercent）。
+    if (ThirtyFlagsMode() && (mSeedType == SeedType::SEED_PEASHOOTER || mSeedType == SeedType::SEED_CATTAIL))
     {
         aProjectile->mElement = TF_ELEM_MARK;
     }

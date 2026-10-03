@@ -1358,7 +1358,9 @@ void ThirtyFlagsZombieAtePlant(Zombie* theZombie, Plant* thePlant)
     }
 
     // 【三十旗】僵?P3「尸王领域」：领域期间全体僵尸啃食均吸血?
-    if (gThirtyFlags.HasMutation(MUTATION_LIFESTEAL) || ThirtyFlagsBossIsDomainActive())
+    // 【三十旗·平衡】腐化期间同样抑制突变「吸血」与尸王领域吸血
+    if ((gThirtyFlags.HasMutation(MUTATION_LIFESTEAL) || ThirtyFlagsBossIsDomainActive()) &&
+        ThirtyFlagsGetCorrupt(theZombie, theZombie->mBoard) == 0)
     {
         float aRate = ThirtyFlagsBossIsDomainActive() ? 0.04f : 0.02f;
         int aHeal = max(1, (int)((float)theZombie->mBodyMaxHealth * aRate));
@@ -1385,7 +1387,14 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
     if (theZombie->IsDeadOrDying() || !theZombie->IsOnBoard())
         return;
 
-    if (TFHasElite(theZombie, ELITE_REGEN) && (theZombie->mZombieAge % 10) == 0)
+    // 【三十旗·平衡】精英再生：原来是 % 10 —— mZombieAge 每帧 +1、后端 100 帧/秒，
+    // 2% × 10 次/秒 = 每秒回复 20% 最大生命，远超设计稿「每秒 2%」，
+    // 结果任何低 DPS 植物（忧郁菇/猫尾草 40 DPS）都完全打不动精英。
+    // 现按设计稿修正为每秒 2%。
+    // 【三十旗·平衡】腐化期间禁止回复（这是「打不动精英」的机制解）
+    if (TFHasElite(theZombie, ELITE_REGEN) &&
+        ThirtyFlagsGetCorrupt(theZombie, theZombie->mBoard) == 0 &&
+        (theZombie->mZombieAge % 100) == 0)
     {
         int aHeal = max(1, (int)((float)theZombie->mBodyMaxHealth * 0.02f));
         if (theZombie->mBodyHealth < theZombie->mBodyMaxHealth)
@@ -1403,7 +1412,8 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
         }
     }
 
-    if (TFHasElite(theZombie, ELITE_SHIELD))
+    if (TFHasElite(theZombie, ELITE_SHIELD) &&
+        ThirtyFlagsGetCorrupt(theZombie, theZombie->mBoard) == 0)
     {
         if (theZombie->mBossBungeeCounter > 0)
         {
@@ -2010,7 +2020,7 @@ void ThirtyFlagsShowCenterText(const SexyString& theText, const Sexy::Color& the
 }
 
 // -------------------------------------------------------------------------------------------
-// 【三十旗·平衡 v5】破绽标记系统（豌豆射手 = 施加者 / 双发、机枪 = 引爆者）
+// 【三十旗·平衡 v5】破绽标记系统（豌豆射手、猫尾草 = 施加者 / 双发、机枪 = 引爆者）
 // 存储用文件级 static 表按僵尸 ID 索引（不得给 Zombie 加成员——SyncBoard 按 sizeof(Board) 写盘）
 // -------------------------------------------------------------------------------------------
 static int  gTFMarkCount[512];
@@ -2044,6 +2054,86 @@ int ThirtyFlagsGetMark(Zombie* theZombie, Board* theBoard)
     if (gTFMarkTimer[aZid] <= 0)
         return 0;
     return gTFMarkCount[aZid];
+}
+
+// -------------------------------------------------------------------------------------------
+// 【三十旗·平衡】忧郁菇「孢子腐化」
+//
+// 被孢子命中的僵尸进入腐化：
+//   1) 禁止一切回复 —— 精英「再生」/「护盾」、突变「吸血」全部失效
+//      （这才是「打不动精英」的机制解：不靠 DPS 硬碰，而是关掉对方的回血）
+//   2) 每层 -12% 移速（最多 4 层 = -48%）
+// 同样用文件级 static 表按僵尸 ID 索引（不得给 Zombie 加成员）。
+// -------------------------------------------------------------------------------------------
+static int  gTFCorruptStacks[512];
+static int  gTFCorruptTimer[512];
+static int  gTFCorruptID[512];
+
+void ThirtyFlagsAddCorrupt(Zombie* theZombie, Board* theBoard)
+{
+    if (!ThirtyFlagsMode() || !theZombie || !theBoard)
+        return;
+    if (theZombie->mZombieType == ZOMBIE_BOSS)
+        return;
+    int aZid = theBoard->ZombieGetID(theZombie);
+    if (aZid < 0 || aZid >= 512)
+        return;
+    if (gTFCorruptID[aZid] != aZid)
+    {
+        gTFCorruptID[aZid] = aZid;
+        gTFCorruptStacks[aZid] = 0;
+    }
+    if (gTFCorruptStacks[aZid] < TF_CORRUPT_MAX_STACKS)
+        gTFCorruptStacks[aZid]++;
+    gTFCorruptTimer[aZid] = TF_CORRUPT_DURATION;
+}
+
+int ThirtyFlagsGetCorrupt(Zombie* theZombie, Board* theBoard)
+{
+    if (!ThirtyFlagsMode() || !theZombie || !theBoard)
+        return 0;
+    int aZid = theBoard->ZombieGetID(theZombie);
+    if (aZid < 0 || aZid >= 512 || gTFCorruptID[aZid] != aZid)
+        return 0;
+    if (gTFCorruptTimer[aZid] <= 0)
+        return 0;
+    return gTFCorruptStacks[aZid];
+}
+
+// -------------------------------------------------------------------------------------------
+// 【三十旗·平衡】猫尾草「收割」
+//
+// 猫尾草的刺带「破绽」标记（复用豌豆的标记系统），并且：
+//   * 对被腐化的目标伤害 ×2（腐化 × 收割 = 明确的组合 build）
+//   * 对精英僵尸伤害 ×1.5（不依赖腐化也能咬得动精英）
+// 两者同时成立时取乘积（×3）。返回百分比，100 = 无加成。
+// -------------------------------------------------------------------------------------------
+int ThirtyFlagsHarvestPercent(Zombie* theZombie, Board* theBoard)
+{
+    if (!ThirtyFlagsMode() || !theZombie)
+        return 100;
+    int aPct = 100;
+    if (ThirtyFlagsGetCorrupt(theZombie, theBoard) > 0)
+        aPct = aPct * TF_HARVEST_CORRUPT_PCT / 100;
+    if (TFHasElite(theZombie, ELITE_SWIFT) || TFHasElite(theZombie, ELITE_IRONWALL) ||
+        TFHasElite(theZombie, ELITE_REGEN) || TFHasElite(theZombie, ELITE_SHIELD) ||
+        TFHasElite(theZombie, ELITE_SPLIT) || TFHasElite(theZombie, ELITE_SPEAR) ||
+        TFHasElite(theZombie, ELITE_BERSERK))
+        aPct = aPct * TF_HARVEST_ELITE_PCT / 100;
+    return aPct;
+}
+
+static void ThirtyFlagsTickCorrupt()
+{
+    for (int i = 0; i < 512; i++)
+    {
+        if (gTFCorruptTimer[i] > 0)
+        {
+            gTFCorruptTimer[i]--;
+            if (gTFCorruptTimer[i] == 0)
+                gTFCorruptStacks[i] = 0;
+        }
+    }
 }
 
 static void ThirtyFlagsTickMarks()
@@ -3068,6 +3158,7 @@ void ThirtyFlagsUpdateSod(Board* theBoard)
 void ThirtyFlagsBoardUpdate(Board* theBoard)
 {
     ThirtyFlagsTickMarks();   // ThirtyFlags v5: break-mark timer
+    ThirtyFlagsTickCorrupt(); // 【三十旗·平衡】腐化计时器
     if (!ThirtyFlagsMode() || !theBoard)
         return;
 
@@ -3136,6 +3227,15 @@ void ThirtyFlagsBoardUpdate(Board* theBoard)
             continue;
 
         float aMul = aGlobalSpeed;
+
+        // 【三十旗·平衡】腐化减速：每层 -12%（最多 4 层 = -48%）
+        {
+            int aCorrupt = ThirtyFlagsGetCorrupt(aZombie, theBoard);
+            if (aCorrupt > 0)
+            {
+                aMul *= max(0.40f, 1.0f - (float)TF_CORRUPT_SLOW_PERCENT / 100.0f * (float)aCorrupt);
+            }
+        }
 
         if (TFHasElite(aZombie, ELITE_SWIFT))
 
