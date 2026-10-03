@@ -97,10 +97,18 @@ constexpr int   TF_CORRUPT_SLOW_PERCENT = 12;   // 每层减速 %（4 层 = -48%）
 constexpr int   TF_HARVEST_CORRUPT_PCT  = 200;  // 猫尾草对「腐化」目标的伤害 %（×2）
 constexpr int   TF_HARVEST_ELITE_PCT    = 150;  // 猫尾草对精英僵尸的伤害 %（×1.5）
 
-// 【三十旗·平衡】突变「尸爆」：对半径内植物**造成伤害**（原实现是无条件秒杀 + 零特效，
-// 玩家只会看到植物凭空消失）。8000 血的坚果/南瓜应该扛得住一次尸爆。
-constexpr int   TF_EXPLODE_DAMAGE       = 500;  // 尸爆对半径内每株植物的伤害
+// 【三十旗·平衡】「直接伤害」家族（尸爆 / 尸毒 / 精英投矛 / 僵王技能）
+//
+// 两条通用规则（用户需求）：
+//   1) 它们是"直接伤害"，不是无条件秒杀 —— 全部改成扣血，坦克植物扛得住；
+//   2) **南瓜头当护甲**：植物套在南瓜里时，这些直接伤害全部由南瓜先吃
+//      （实现在 TFDirectDamageTarget / TFDirectDamageInRadius）。
+constexpr int   TF_EXPLODE_DAMAGE       = 200;  // 尸爆对半径内每株的伤害（原 500，再削）
 constexpr int   TF_EXPLODE_RADIUS       = 90;   // 尸爆半径（像素，约 1.1 格）
+constexpr int   TF_POISON_TICK_DAMAGE   = 3;    // 尸毒每 25 帧对承伤对象扣的血（原 4）
+constexpr int   TF_ELITE_SPEAR_DAMAGE   = 70;   // 精英「投矛」对最前排植物的伤害（原 100）
+constexpr int   TF_BOSS_SLAM_DAMAGE     = 1500; // 僵王 P1 砸击（原为 2x2 秒杀）
+constexpr int   TF_BOSS_ULTIMATE_DAMAGE = 2000; // 僵王 P3 咆哮（原为整列秒杀）
 constexpr int   TF_BURST_MAX            = 12;    // 处决爆发环并发上限
 constexpr int   TF_BURST_LIFE           = 30;    // 处决爆发环存活帧数
 constexpr int   TF_FREEZE_MAX_FRAMES    = 12;    // 单次顿帧上限（帧，只冻结表现层）

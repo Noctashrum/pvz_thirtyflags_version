@@ -805,6 +805,70 @@ void ThirtyFlags::UpdateKillStreak()
     }
 }
 
+// ----------------------------------------------------------------------------------------------------
+// 【三十旗·平衡】「直接伤害」的统一入口 —— 全部遵守「南瓜优先承伤」
+//
+// 尸爆 / 尸毒 / 精英投矛 / 僵王技能都属于"绕开正常防御结算的直接伤害"。
+// 规则（用户需求）：
+//   * 它们扣血，不再无条件秒杀 —— 血量厚的植物应该扛得住；
+//   * **该格有南瓜头时，伤害全部由南瓜吃**，套在里面的植物一点血不掉
+//     （南瓜就是护甲 —— 这也是 PvZ 里南瓜的设计意图）。
+// ----------------------------------------------------------------------------------------------------
+
+// 某格「直接伤害」的承伤对象：有南瓜就是南瓜，否则是该格的普通植物
+static Plant* TFDirectDamageTarget(Board* theBoard, int theGridX, int theGridY)
+{
+    if (!theBoard)
+        return nullptr;
+
+    Plant* aPumpkin = theBoard->GetPumpkinAt(theGridX, theGridY);
+    if (aPumpkin && !aPumpkin->mDead)
+        return aPumpkin;
+
+    return theBoard->GetTopPlantAt(theGridX, theGridY, PlantPriority::TOPPLANT_ONLY_NORMAL_POSITION);
+}
+
+// 对半径内的格子各结算一次直接伤害（每格只打一次，避免南瓜被同格多株植物重复转发）
+// 返回致死数量
+static int TFDirectDamageInRadius(Board* theBoard, int thePixelX, int thePixelY, int theRadius, int theDamage)
+{
+    if (!theBoard)
+        return 0;
+
+    bool aDone[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
+    memset(aDone, 0, sizeof(aDone));
+
+    int aKilled = 0;
+    Plant* aPlant = nullptr;
+    while (theBoard->IteratePlants(aPlant))
+    {
+        if (aPlant->mDead || aPlant->mPlantCol < 0 || aPlant->mPlantCol >= MAX_GRID_SIZE_X ||
+            aPlant->mRow < 0 || aPlant->mRow >= MAX_GRID_SIZE_Y)
+            continue;
+
+        if (!GetCircleRectOverlap(thePixelX, thePixelY, theRadius, aPlant->GetPlantRect()))
+            continue;
+
+        if (aDone[aPlant->mPlantCol][aPlant->mRow])
+            continue;
+        aDone[aPlant->mPlantCol][aPlant->mRow] = true;
+
+        Plant* aVictim = TFDirectDamageTarget(theBoard, aPlant->mPlantCol, aPlant->mRow);
+        if (!aVictim)
+            continue;
+
+        aVictim->mPlantHealth -= theDamage;
+        if (aVictim->mPlantHealth <= 0)
+        {
+            theBoard->mPlantsEaten++;
+            aVictim->Die();
+            aKilled++;
+        }
+    }
+
+    return aKilled;
+}
+
 void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow)
 {
     if (!mActive)
@@ -841,21 +905,7 @@ void ThirtyFlags::OnZombieKilled(Board* theBoard, int theX, int theY, int theRow
         int aRenderOrder = Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, theRow, 0);
         theBoard->mApp->AddTodParticle((float)theX, (float)theY, aRenderOrder, ParticleEffect::PARTICLE_JACKEXPLODE);
 
-        int aKilled = 0;
-        Plant* aBlast = nullptr;
-        while (theBoard->IteratePlants(aBlast))
-        {
-            if (!GetCircleRectOverlap(theX, theY, TF_EXPLODE_RADIUS, aBlast->GetPlantRect()))
-                continue;
-
-            aBlast->mPlantHealth -= TF_EXPLODE_DAMAGE;
-            if (aBlast->mPlantHealth <= 0)
-            {
-                theBoard->mPlantsEaten++;
-                aBlast->Die();
-                aKilled++;
-            }
-        }
+        int aKilled = TFDirectDamageInRadius(theBoard, theX, theY, TF_EXPLODE_RADIUS, TF_EXPLODE_DAMAGE);
 
         {
             char aBuf[160];
@@ -1474,11 +1524,16 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
             {
                 theZombie->mBossStompCounter = -15;
 
-                aTarget->mPlantHealth -= 100;
-                if (aTarget->mPlantHealth <= 0)
+                // 【三十旗·平衡】投矛同样走「南瓜优先承伤」：装在南瓜里的植物不掉血
+                Plant* aSpearVictim = TFDirectDamageTarget(theZombie->mBoard, aTarget->mPlantCol, aTarget->mRow);
+                if (aSpearVictim)
                 {
-                    theZombie->mBoard->mPlantsEaten++;
-                    aTarget->Die();
+                    aSpearVictim->mPlantHealth -= TF_ELITE_SPEAR_DAMAGE;
+                    if (aSpearVictim->mPlantHealth <= 0)
+                    {
+                        theZombie->mBoard->mPlantsEaten++;
+                        aSpearVictim->Die();
+                    }
                 }
 
                 int aRenderOrder = Board::MakeRenderOrder(RENDER_LAYER_PROJECTILE, theZombie->mRow, 0);
@@ -2762,23 +2817,24 @@ static void TFBossDoSlam(Board* theBoard, Zombie* theBoss, int theRow)
 {
     int aCol = TFClampI(theBoard->PixelToGridX((int)theBoss->mPosX, (int)theBoss->mPosY), 0, MAX_GRID_SIZE_X - 1);
     int aMinCol = max(0, aCol - 2);
-    for (int aC = aMinCol; aC <= aMinCol + 1 && aC < MAX_GRID_SIZE_X; aC++)
-    {
-        for (int aR = theRow; aR <= theRow + 1 && aR < TF_LAWN_ROWS; aR++)
-        {
-            Plant* aPlant = theBoard->GetTopPlantAt(aC, aR, TOPPLANT_ANY);
-            if (aPlant && !aPlant->mDead)
-                aPlant->Die();
-        }
-    }
 
     int aPixelX = theBoard->GridToPixelX(aMinCol, theRow);
     int aPixelY = theBoard->GridToPixelY(aMinCol, theRow);
-    // 【三十旗】砸击也要有可见反馈，
-    // 否则整块植物闪掉也是「凭空消失」。
+
+    // 【三十旗】砸击也要有可见反馈，否则整块植物闪掉就是「凭空消失」。
     theBoard->mApp->AddTodParticle((float)aPixelX, (float)aPixelY,
         Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, theRow, 0), ParticleEffect::PARTICLE_BLASTMARK);
-    theBoard->KillAllPlantsInRadius(aPixelX, aPixelY, 60);
+
+    // 【三十旗·平衡】原来这里是 2x2 直接 Die() 再叠一次 KillAllPlantsInRadius(60)，
+    // 双重秒杀；现在统一走「直接伤害」：扣 TF_BOSS_SLAM_DAMAGE，坦克植物扛得住，
+    // 且南瓜优先承伤。
+    int aKilled = TFDirectDamageInRadius(theBoard, aPixelX, aPixelY, 110, TF_BOSS_SLAM_DAMAGE);
+    {
+        char aBuf[160];
+        sprintf(aBuf, "[TFPlant] boss slam at px=(%d,%d) dmg=%d killed=%d",
+            aPixelX, aPixelY, TF_BOSS_SLAM_DAMAGE, aKilled);
+        TFLog(aBuf);
+    }
     theBoard->mApp->PlayFoley(FOLEY_THUNDER);
 }
 
@@ -2810,13 +2866,20 @@ static void TFBossDoTerrain(Board* theBoard, int theRow)
         theBoard->mGridSquareType[aC][theRow] = GRIDSQUARE_POOL;
 
         Plant* aPlant = theBoard->GetTopPlantAt(aC, theRow, TOPPLANT_ANY);
-        if (aPlant && !aPlant->mDead && aPlant->mSeedType != SEED_LILYPAD && aPlant->mSeedType != SEED_TANGLEKELP)
+        if (!aPlant || aPlant->mDead || aPlant->mSeedType == SEED_LILYPAD || aPlant->mSeedType == SEED_TANGLEKELP)
+            continue;
+
+        // 【三十旗】淹死的植物也要有可见反馈（否则又是一个「凭空消失」）
+        int aSplashOrder = Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, theRow, 0);
+        theBoard->mApp->AddTodParticle((float)theBoard->GridToPixelX(aC, theRow),
+            (float)theBoard->GridToPixelY(aC, theRow), aSplashOrder, ParticleEffect::PARTICLE_POOL_SPLASH);
+
+        // 【三十旗·平衡】套在南瓜里的植物不会淹死：由南瓜替它沉下去。
+        Plant* aDrown = TFDirectDamageTarget(theBoard, aC, theRow);
+        if (aDrown)
         {
-            // 【三十旗】淹死的植物也要有可见反馈（否则又是一个「凭空消失」）
-            int aSplashOrder = Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, theRow, 0);
-            theBoard->mApp->AddTodParticle((float)theBoard->GridToPixelX(aC, theRow),
-                (float)theBoard->GridToPixelY(aC, theRow), aSplashOrder, ParticleEffect::PARTICLE_POOL_SPLASH);
-            aPlant->Die();
+            theBoard->mPlantsEaten++;
+            aDrown->Die();
         }
     }
 
@@ -2844,16 +2907,35 @@ static void TFBossDoRoarUltimate(Board* theBoard)
     if (aFrontCol < 0)
         return;
 
+    int aKilled = 0;
     for (int aR = 0; aR < TF_LAWN_ROWS; aR++)
     {
         Plant* aPlant = theBoard->GetTopPlantAt(aFrontCol, aR, TOPPLANT_ANY);
-        if (aPlant && !aPlant->mDead)
+        if (!aPlant || aPlant->mDead)
+            continue;
+
+        // 【三十旗】整列植物被摧毁也要有反馈，否则像「整列凭空消失」。
+        theBoard->mApp->AddTodParticle((float)aPlant->mX, (float)aPlant->mY,
+            Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, aR, 0), ParticleEffect::PARTICLE_BLASTMARK);
+
+        // 【三十旗·平衡】整列秒杀 → 直接伤害；南瓜优先承伤，装在南瓜里的植物掉不动
+        Plant* aVictim = TFDirectDamageTarget(theBoard, aFrontCol, aR);
+        if (!aVictim)
+            continue;
+
+        aVictim->mPlantHealth -= TF_BOSS_ULTIMATE_DAMAGE;
+        if (aVictim->mPlantHealth <= 0)
         {
-            // 【三十旗】整列植物被摧毁也要有反馈，否则像「整列凭空消失」。
-            theBoard->mApp->AddTodParticle((float)aPlant->mX, (float)aPlant->mY,
-                Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, aR, 0), ParticleEffect::PARTICLE_BLASTMARK);
-            aPlant->Die();
+            theBoard->mPlantsEaten++;
+            aVictim->Die();
+            aKilled++;
         }
+    }
+    {
+        char aBuf[160];
+        sprintf(aBuf, "[TFPlant] boss ultimate col=%d dmg=%d killed=%d",
+            aFrontCol, TF_BOSS_ULTIMATE_DAMAGE, aKilled);
+        TFLog(aBuf);
     }
     theBoard->mApp->PlayFoley(FOLEY_THUNDER);
 }
@@ -3396,24 +3478,27 @@ void ThirtyFlagsBoardUpdate(Board* theBoard)
 
     if (aHasPoison && (theBoard->mMainCounter % 25) == 0)
     {
-        Plant* aPlant = nullptr;
-        while (theBoard->IteratePlants(aPlant))
+        // 【三十旗·平衡】按格结算，每格只打一次；南瓜优先承伤
+        for (int aCol = 0; aCol < MAX_GRID_SIZE_X; aCol++)
         {
-            if (aPlant->mPlantCol < 0 || aPlant->mPlantCol >= MAX_GRID_SIZE_X ||
-                aPlant->mRow < 0 || aPlant->mRow >= MAX_GRID_SIZE_Y)
-                continue;
-
-            if (gThirtyFlagsPoison[aPlant->mPlantCol][aPlant->mRow] > 0)
+            for (int aPoolRow = 0; aPoolRow < MAX_GRID_SIZE_Y; aPoolRow++)
             {
-                aPlant->mPlantHealth -= 4;
-                if (aPlant->mPlantHealth <= 0)
+                if (gThirtyFlagsPoison[aCol][aPoolRow] <= 0)
+                    continue;
+
+                Plant* aVictim = TFDirectDamageTarget(theBoard, aCol, aPoolRow);
+                if (!aVictim || aVictim->mDead)
+                    continue;
+
+                aVictim->mPlantHealth -= TF_POISON_TICK_DAMAGE;
+                if (aVictim->mPlantHealth <= 0)
                 {
                     theBoard->mPlantsEaten++;
-                    aPlant->Die();
+                    aVictim->Die();
                     {
                         char aBuf[160];
                         sprintf(aBuf, "[TFPlant] poison killed plant %d at (%d,%d)",
-                            (int)aPlant->mSeedType, aPlant->mPlantCol, aPlant->mRow);
+                            (int)aVictim->mSeedType, aCol, aPoolRow);
                         TFLog(aBuf);
                     }
                 }
