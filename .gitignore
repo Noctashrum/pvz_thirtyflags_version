@@ -62,3 +62,6 @@ docs/内部*
 *.bak
 *~
 docs/_plan*.png
+
+# ---- 自动化回归验证的截图 / 日志产物 ----
+docs/mower/

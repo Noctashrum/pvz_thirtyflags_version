@@ -43,6 +43,7 @@ public:
 	virtual void			AddedToManager(Sexy::WidgetManager* theWidgetManager) override;
 	virtual void			RemovedFromManager(Sexy::WidgetManager* theWidgetManager) override;
 	virtual void			ButtonDepress(int theId) override;
+	virtual void			KeyChar(SexyChar theChar) override;	// 【三十旗】1/2/3 选强化
 
 	void					RefreshLabels();
 	void					LayoutCards();

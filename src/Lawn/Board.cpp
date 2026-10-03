@@ -8044,6 +8044,15 @@ void Board::KeyChar(SexyChar theChar)
 		);
 		return;
 	}
+
+	// [ThirtyFlags] SeedChooserScreen is BringToBack'd so it NEVER receives keyboard
+	// input (Board is the focused widget). Forward S/s here so the auto-pick cheat
+	// actually works during seed selection.
+	if (mApp->mSeedChooserScreen && (theChar == _S('S') || theChar == _S('s')))
+	{
+		mApp->mSeedChooserScreen->KeyChar(theChar);
+		return;
+	}
 	// 【三十旗】Release 下也要能用推进键。
 	// 原版 mDebugKeysEnabled 只在 Debug 构建 + 命令行 -tod 时置位，
 	// Release 下恒为 false，导致本函数在这里直接 return，
@@ -8101,7 +8110,9 @@ void Board::KeyChar(SexyChar theChar)
 		return;
 	}
 
-	TodTraceAndLog("Board cheat key '%c'", theChar);
+	// [ThirtyFlags] log mode/scene/stage/paused so a "key does nothing" case is diagnosable.
+	TodTraceAndLog("Board cheat key '%c' mode=%d scene=%d stage=%d paused=%d", theChar,
+		(int)mApp->mGameMode, (int)mApp->mGameScene, mChallenge ? mChallenge->mSurvivalStage : -1, mPaused ? 1 : 0);
 
 	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
 	{
@@ -8821,6 +8832,7 @@ void Board::KeyChar(SexyChar theChar)
 	{
         if (theChar == _S('.'))
         {
+            TFLog("[TFMower] dot-key: advance flag requested");
 			// 与 LawnApp::CheckForGameEnd 的正常推进序列保持一致：
             // 先 mSurvivalStage++，再 AdvanceFlag，最后 InitSurvivalStage()。
             // 少了这几步就只是改了内部状态，场地和波次都不会重建。

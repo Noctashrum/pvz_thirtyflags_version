@@ -112,6 +112,14 @@ static const ThirtyFlagsFlagDef gThirtyFlagsFlagDefs[TF_TOTAL_FLAGS] = {
 static int gThirtyFlagsSodProgress[MAX_GRID_SIZE_Y];
 static int gThirtyFlagsPrevUnlockedRows = 0;
 
+// 【三十旗】哪些行「已经发过小推车」。
+// 为什么要位图而不是「每帧密等补齐」：
+// 每帧密等补齐会让玩家丢的车在下一帧凭空复活，
+// 而位图能区分「还没发」和「已经用掉了」。
+// 位图随 .tf 附加存档落盘，所以读旧存档时位图为 0，
+// 会把旧档里缺失的车补回来。
+static int gThirtyFlagsMowerGranted = 0;
+
 // 每格是否已变成水（用于水格淡入，避免换旗时水突然出现）
 static int gThirtyFlagsWaterFade[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 
@@ -241,7 +249,8 @@ void TFLog(const char* theLine)
     (void)theLine;
     return;
 #else
-    FILE* f = fopen("D:////dsh-project////LawnProject////Release////thirtyflags_flow.log", "a");
+    // 相对路径：落在 exe 同目录，与 LawnApp 的 thirtyflags.log 一致
+    FILE* f = fopen("thirtyflags_flow.log", "a");
     if (f)
     {
         fprintf(f, "[%d] %s\n", (int)time(NULL), theLine);
@@ -362,6 +371,7 @@ void ThirtyFlags::StartRun()
 
     memset(gThirtyFlagsPoison, 0, sizeof(gThirtyFlagsPoison));
     memset(gThirtyFlagsWaterFade, 0, sizeof(gThirtyFlagsWaterFade));
+    gThirtyFlagsMowerGranted = 0;
 
     // 开局：已开放的行直接显示为草皮（不播动画），其余行等解锁时再滚出
     for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
@@ -949,32 +959,7 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
 
     ThirtyFlagsSetupBoard(theBoard);
 
-    // 【三十旗】新解锁行补生成小推车 —— InitLawnMowers 只在关卡开始跑一次，
-    // 之后解锁的行（mPlantRow 从 DIRT 变为可种植）没有推车（用户报 bug）。
-    // 逐行检查：已解锁、可种植、且该行还没有推车 → 补一台。
-    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
-    {
-        if (!gThirtyFlags.IsRowUnlocked(aRow) || theBoard->mPlantRow[aRow] == PlantRowType::PLANTROW_DIRT)
-            continue;
-
-        bool aHasMower = false;
-        LawnMower* aMowerScan = nullptr;
-        while (theBoard->mLawnMowers.IterateNext(aMowerScan))
-        {
-            if (aMowerScan->mRow == aRow)
-            {
-                aHasMower = true;
-                break;
-            }
-        }
-        if (!aHasMower)
-        {
-            LawnMower* aNewMower = theBoard->mLawnMowers.DataArrayAlloc();
-            aNewMower->LawnMowerInitialize(aRow);
-            aNewMower->mVisible = true;   // v5: visible
-        }
-    }
-
+    // 【三十旗】新解锁行的小推车由 ThirtyFlagsUpdateSod 在解锁那一帧补放（见 TFSpawnLawnMower），这里不再重复处理
     // 整张 180 波表在关卡开始时由 Board::PickZombieWaves 一次建成
     // （每波白名单按该波所属旗次取），换旗只需把「当前波」推进到下一面旗的起点。
     theBoard->mCurrentWave = (gThirtyFlags.mFlag - 1) * TF_WAVES_PER_FLAG;
@@ -1007,39 +992,6 @@ void ThirtyFlagsFlagChanged(Board* theBoard)
             theBoard->AddPlant(aCol, aRow, (SeedType)gTFDeadSeed[k], SeedType::SEED_NONE);
         }
         gTFDeadCount = 0;
-    }
-
-    // 【三十旗】新解锁行补小推车（场地铺设完成之后执行，确保 mPlantRow 已是最新）
-    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
-    {
-        if (!gThirtyFlags.IsRowUnlocked(aRow) || theBoard->mPlantRow[aRow] == PlantRowType::PLANTROW_DIRT)
-            continue;
-
-        bool aHasMower = false;
-        LawnMower* aScan = nullptr;
-        while (theBoard->mLawnMowers.IterateNext(aScan))
-        {
-            if (!aScan->mDead && aScan->mRow == aRow)
-            {
-                aHasMower = true;
-                break;
-            }
-        }
-
-        if (!aHasMower)
-        {
-            LawnMower* aNewMower = theBoard->mLawnMowers.DataArrayAlloc();
-            if (aNewMower)
-            {
-                aNewMower->LawnMowerInitialize(aRow);
-                aNewMower->mVisible = true;
-                aNewMower->mDead = false;
-            }
-        }
-        else if (aScan)
-        {
-            aScan->mVisible = true;
-        }
     }
 
 }
@@ -1077,6 +1029,13 @@ void ThirtyFlagsIntermissionBegin(Board* theBoard)
 
 void ThirtyFlagsAdvanceFlag(Board* theBoard)
 {
+    {
+        char aBuf[128];
+        sprintf(aBuf, "[TFMower] AdvanceFlag: stage=%d -> flag %d",
+            theBoard && theBoard->mChallenge ? theBoard->mChallenge->mSurvivalStage : -1,
+            ThirtyFlagsCurrentFlag(theBoard));
+        TFLog(aBuf);
+    }
     // 唯一数据源是 mChallenge->mSurvivalStage + 1；不能用 gThirtyFlags.mFlag，否则用 Tab 直接跳旗时两者脱节，场地会按错旗次铺开。
     gThirtyFlags.ApplyFlag(ThirtyFlagsCurrentFlag(theBoard));
     // 【三十旗】修复：这里不能关 mIntermission —— CheckForGameEnd 的顺序是
@@ -2163,6 +2122,8 @@ void ThirtyFlagsOnSaveGame(Board* theBoard)
         fwrite(gTFDeadSeed, sizeof(int), gTFDeadCount, aFile);
     }
     fwrite(gThirtyFlagsPoison, sizeof(gThirtyFlagsPoison), 1, aFile);
+    // 【三十旗】补车位图，放在最后，老存档读不到就是 0。
+    fwrite(&gThirtyFlagsMowerGranted, sizeof(int), 1, aFile);
     fclose(aFile);
 }
 
@@ -2182,11 +2143,24 @@ void ThirtyFlagsOnLoadGame(Board* theBoard)
     for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
         gThirtyFlagsSodProgress[aRow] = gThirtyFlags.IsRowUnlocked(aRow) ? 1000 : 0;
     gThirtyFlagsPrevUnlockedRows = gThirtyFlags.mUnlockedRows;
+    // [ThirtyFlags] 旧存档里补位的车停在 mPosX = -160（屏外），这里把它们挪回场内。
+    {
+        LawnMower* aMower = nullptr;
+        while (theBoard->mLawnMowers.IterateNext(aMower))
+        {
+            if (!aMower->mDead && aMower->mMowerState == LawnMowerState::MOWER_READY && aMower->mPosX < -50.0f)
+            {
+                aMower->mPosX = -21.0f;
+                aMower->mVisible = true;
+            }
+        }
+    }
     for (int x = 0; x < MAX_GRID_SIZE_X; x++)
         for (int y = 0; y < MAX_GRID_SIZE_Y; y++)
             gThirtyFlagsWaterFade[x][y] = gThirtyFlags.IsWaterCell(y, x) ? 100 : 0;
 
     memset(gThirtyFlagsPoison, 0, sizeof(gThirtyFlagsPoison));
+    gThirtyFlagsMowerGranted = 0;
     gThirtyFlags.mBossPtr = NULL;
     gThirtyFlags.mBossPhase = 0;
     gThirtyFlags.mIntermission = false;
@@ -2235,6 +2209,7 @@ void ThirtyFlagsOnLoadGame(Board* theBoard)
         aGot += (int)fread(gTFDeadSeed, sizeof(int), gTFDeadCount, aFile);
     }
     aGot += (int)fread(gThirtyFlagsPoison, sizeof(gThirtyFlagsPoison), 1, aFile);
+    aGot += (int)fread(&gThirtyFlagsMowerGranted, sizeof(int), 1, aFile);
     fclose(aFile);
 
     gThirtyFlags.mUpgradeCount = 0;
@@ -2955,6 +2930,81 @@ void ThirtyFlagsDrawBackdrop(Board* theBoard, Graphics* g)
     }
 #endif
 }
+// -------------------------------------------------------------------------------------------
+// [ThirtyFlags] 小推车补位
+//
+// 原版只在 CutScene::PlaceLawnItems() 里调 Board::InitLawnMowers()，而它被 IsSurvivalRepick()
+// 挡住（三十旗算生存模式，且第 2 旗起 mSurvivalStage > 0），所以原版从第 2 旗起再也不建车。
+//
+// 更隐蔽的坑：LawnMowerInitialize() 把 mPosX 设成 -160（屏幕外），真正把车挪进场的是
+// CutScene::Update() 里的 mPosX = CalcPosition(..., -80, -21) —— 那段同样被 IsSurvivalRepick()
+// 跳过。也就是说只做 DataArrayAlloc + LawnMowerInitialize，车会被建出来但永远停在屏幕外，
+// 肉眼看上去就是「小推车不出现」。补车时必须自己把车挪到位。
+// -------------------------------------------------------------------------------------------
+static void TFSpawnLawnMower(Board* theBoard, int theRow)
+{
+    if (!theBoard || theRow < 0 || theRow >= MAX_GRID_SIZE_Y)
+        return;
+    if (theBoard->mPlantRow[theRow] == PlantRowType::PLANTROW_DIRT)
+        return;
+
+    LawnMower* aMower = theBoard->mLawnMowers.DataArrayAlloc();
+    if (!aMower)
+    {
+        TFLog("[TFMower] spawn FAILED: pool exhausted");
+        return;
+    }
+
+    aMower->LawnMowerInitialize(theRow);            // 注意：内部把 mPosX 设为 -160（屏外）
+    aMower->mVisible = true;
+    aMower->mRollingInCounter = 0;
+    aMower->mMowerState = LawnMowerState::MOWER_ROLLING_IN;   // 原版入场动画：100 帧内 -160 -> -21
+
+    // [patch] 生成结果落日志，用于排查「小推车到底有没有被建出来」。
+    {
+        char aBuf[128];
+        sprintf(aBuf, "[TFMower] spawn row=%d posX=%.1f visible=%d state=%d",
+            theRow, aMower->mPosX, aMower->mVisible ? 1 : 0, (int)aMower->mMowerState);
+        TFLog(aBuf);
+    }
+
+    // 【三十旗】记下「这行已发过车」，丢车以后不会凭空补回来。
+    gThirtyFlagsMowerGranted |= (1 << theRow);
+}
+// -------------------------------------------------------------------------------------------
+// [ThirtyFlags] 小推车安全网
+//
+// 每帧判断一遍：已解锁、未发过车、当前没车 -> 补一辆。
+// 为什么要用每帧判断，而不是「解锁那一帧补一次」：
+//   * 解锁那一帧 mPlantRow 可能还没从 DIRT 改过来，补车会被条件挡住
+//   * 读旧存档进入时，已解锁的行不会走「新解锁那一帧」的逻辑，永远补不到车
+// 而 granted 位图保证「已经发过」的行不会重复补，所以玩家丢掉的车不会凭空复活。
+// -------------------------------------------------------------------------------------------
+static void TFEnsureRowLawnMowers(Board* theBoard)
+{
+    if (!theBoard || !gLawnApp || gLawnApp->mGameScene != GameScenes::SCENE_PLAYING)
+        return;
+
+    for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < 5; aRow++)
+    {
+        if (!gThirtyFlags.IsRowUnlocked(aRow))
+            continue;
+        if (gThirtyFlagsMowerGranted & (1 << aRow))
+            continue;
+        if (theBoard->FindLawnMowerInRow(aRow) != nullptr)
+        {
+            // 原版开场演示已经把车放好了，直接认领
+            {
+                char aBuf[128];
+                sprintf(aBuf, "[TFMower] adopt existing mower row=%d", aRow);
+                TFLog(aBuf);
+            }
+            gThirtyFlagsMowerGranted |= (1 << aRow);
+            continue;
+        }
+        TFSpawnLawnMower(theBoard, aRow);
+    }
+}
 void ThirtyFlagsUpdateSod(Board* theBoard)
 {
     if (!ThirtyFlagsMode() || !theBoard)
@@ -2970,20 +3020,20 @@ void ThirtyFlagsUpdateSod(Board* theBoard)
             if (aNewly & (1 << aRow))
             {
                 gThirtyFlagsSodProgress[aRow] = 1;
-
-                // 【三十旗】新解锁的行补放小推车 —— 只在解锁那一帧补一次。
-                // 不能用“每帧幂等补齐”：那样玩家丢车后下一帧就会凭空补回来。
-                if (theBoard->mPlantRow[aRow] != PlantRowType::PLANTROW_DIRT &&
-                    theBoard->FindLawnMowerInRow(aRow) == nullptr)
                 {
-                    LawnMower* aMower = theBoard->mLawnMowers.DataArrayAlloc();
-                    aMower->LawnMowerInitialize(aRow);
-                    aMower->mVisible = false;
+                    char aBuf[160];
+                    sprintf(aBuf, "[TFMower] row %d unlocked, plantRow=%d hasMower=%d",
+                        aRow, (int)theBoard->mPlantRow[aRow],
+                        theBoard->FindLawnMowerInRow(aRow) != nullptr ? 1 : 0);
+                    TFLog(aBuf);
                 }
             }
         }
         gThirtyFlagsPrevUnlockedRows = aUnlocked;
     }
+
+    // 【三十旗】小推车安全网：每帧补齐。
+    TFEnsureRowLawnMowers(theBoard);
 
     // 推进动画
     for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < 5; aRow++)

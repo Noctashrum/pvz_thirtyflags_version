@@ -143,6 +143,20 @@ void ThirtyFlagsDialog::Draw(Graphics* g)
 	}
 }
 
+// 【三十旗】强化三选一弹窗的键盘支持。
+// 弹窗打开时 mFocusWidget 会变成弹窗，所以键盘只能在这里接——
+// 原来只能用鼠标点，键盘刁什么都没反应。
+void ThirtyFlagsDialog::KeyChar(SexyChar theChar)
+{
+    if (theChar == _S('1') || theChar == _S('2') || theChar == _S('3'))
+    {
+        ButtonDepress(ThirtyFlagsDialog_Choice1 + (int)(theChar - _S('1')));
+        return;
+    }
+
+    LawnDialog::KeyChar(theChar);
+}
+
 void ThirtyFlagsDialog::ButtonDepress(int theId)
 {
 	int aIndex = theId - ThirtyFlagsDialog_Choice1;
