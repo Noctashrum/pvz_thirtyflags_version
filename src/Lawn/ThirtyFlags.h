@@ -414,6 +414,7 @@ int     ThirtyFlagsRollFireballElement(int theFrame);
 bool    ThirtyFlagsHasFlagZombieAlive(Board* theBoard);
 void    ThirtyFlagsAddMark(Zombie* theZombie, Board* theBoard);
 void    ThirtyFlagsAddCorrupt(Zombie* theZombie, Board* theBoard);
+bool    ThirtyFlagsIsPlantingIntoPumpkin(Board* theBoard, int theGridX, int theGridY, int theSeedType);
 int     ThirtyFlagsGetCorrupt(Zombie* theZombie, Board* theBoard);
 int     ThirtyFlagsHarvestPercent(Zombie* theZombie, Board* theBoard);
 int     ThirtyFlagsGetMark(Zombie* theZombie, Board* theBoard);   // 战旗光环：场上是否有旗帜僵尸

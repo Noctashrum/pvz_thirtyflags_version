@@ -886,13 +886,8 @@ void SeedPacket::WasPlanted()
 		mTimesUsed++;
 		mRefreshing = true;
 		mRefreshTime = Plant::GetRefreshTime(mPacketType, mImitaterType);
-
-		// 【三十旗】南瓜头冷却 -50%（策划案 6.2）：护甲翻倍后的平衡补偿
-		if (gLawnApp != nullptr && gLawnApp->mGameMode == GameMode::GAMEMODE_THIRTY_FLAGS &&
-			mPacketType == SeedType::SEED_PUMPKINSHELL)
-		{
-			mRefreshTime /= 2;
-		}
+		// 【三十旗·平衡】这里不再给南瓜头自身打折：策划案 6.2 的 -50% 是给
+		// 「被南瓜套住的植物」的，由 Board::MouseDownWithPlant 按格子判定后直接改 mRefreshTime。
 	}
 }
 

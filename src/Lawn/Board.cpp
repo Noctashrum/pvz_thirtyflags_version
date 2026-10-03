@@ -3976,7 +3976,14 @@ void Board::MouseDownWithPlant(int x, int y, int theClickCount)
 
 	if (!mApp->mEasyPlantingCheat && mCursorObject->mCursorType == CursorType::CURSOR_TYPE_PLANT_FROM_BANK && !HasConveyorBeltSeedBank())
 	{
-		if (!TakeSunMoney(GetCurrentPlantCost(aPlantingSeedType, SeedType::SEED_NONE)))
+		// 【三十旗·平衡】策划案 6.2：被南瓜套住的植物（= 种进已有南瓜里的那一株）阳光消耗 -50%。
+		// 注意主体是「被套住的植物」，南瓜头本身不打折。
+		int aCost = GetCurrentPlantCost(aPlantingSeedType, SeedType::SEED_NONE);
+		if (ThirtyFlagsIsPlantingIntoPumpkin(this, aGridX, aGridY, (int)aPlantingSeedType))
+		{
+			aCost /= 2;
+		}
+		if (!TakeSunMoney(aCost))
 		{
 			return;
 		}
@@ -4075,6 +4082,11 @@ void Board::MouseDownWithPlant(int x, int y, int theClickCount)
 		}
 
 		mSeedBank->mSeedPackets[mCursorObject->mSeedBankIndex].WasPlanted();
+		// 【三十旗·平衡】策划案 6.2：被南瓜套住的植物，卡片冷却同样 -50%
+		if (ThirtyFlagsIsPlantingIntoPumpkin(this, aGridX, aGridY, (int)aPlantingSeedType))
+		{
+			mSeedBank->mSeedPackets[mCursorObject->mSeedBankIndex].mRefreshTime /= 2;
+		}
 	}
 	else
 	{
@@ -10055,12 +10067,8 @@ int Board::GetCurrentPlantCost(SeedType theSeedType, SeedType theImitaterType)
 	if (mApp->mGameMode == GameMode::GAMEMODE_THIRTY_FLAGS)
 	{
 		aCost = (int)((float)aCost * gThirtyFlags.GetCostScale());
-
-		// 【三十旗】南瓜头费用 -50%（策划案 6.2）：护甲翻倍后的平衡补偿
-		if (theSeedType == SeedType::SEED_PUMPKINSHELL)
-		{
-			aCost /= 2;
-		}
+		// 【三十旗·平衡】南瓜头自身不再打折：策划案 6.2 的 -50% 是给「被南瓜套住的植物」的，
+		// 那部分在 Board::MouseDownWithPlant 里按格子判定（见 ThirtyFlagsIsPlantingIntoPumpkin）。
 	}
 
 	return aCost;

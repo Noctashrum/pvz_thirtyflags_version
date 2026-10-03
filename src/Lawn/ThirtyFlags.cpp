@@ -2123,6 +2123,28 @@ int ThirtyFlagsHarvestPercent(Zombie* theZombie, Board* theBoard)
     return aPct;
 }
 
+// -------------------------------------------------------------------------------------------
+// 【三十旗·平衡】策划案 6.2：被南瓜套住的植物，阳光消耗与冷却 -50%
+//
+// 语义澄清（策划案原文：「南瓜头：护甲 4000→8000；被南瓜套住的植物，其阳光消耗与冷却 -50%」）：
+// 主体是**被套住的那株植物**，不是南瓜头本身 —— 所以南瓜头恢复原价。
+//
+// 唯一能打折的时机是「往已有南瓜头的格子里种植物」：本改版的叠种机制允许这样做
+// （Board::CanPlantAt 的 aPumpkinPlant 分支），这也正好鼓励「先铺南瓜、再往里面种」的建造顺序。
+// 反过来「先种植物、再用南瓜套住」时，植物的钱和冷却早就付过了，无法追认折扣。
+// -------------------------------------------------------------------------------------------
+bool ThirtyFlagsIsPlantingIntoPumpkin(Board* theBoard, int theGridX, int theGridY, int theSeedType)
+{
+    if (!ThirtyFlagsMode() || !theBoard)
+        return false;
+    if (theGridX < 0 || theGridY < 0)
+        return false;
+    // 南瓜头自己不是「被套住的植物」；模仿者也不参与（它复制的是别的卡）
+    if (theSeedType == (int)SeedType::SEED_PUMPKINSHELL || theSeedType == (int)SeedType::SEED_IMITATER)
+        return false;
+    return theBoard->GetPumpkinAt(theGridX, theGridY) != nullptr;
+}
+
 static void ThirtyFlagsTickCorrupt()
 {
     for (int i = 0; i < 512; i++)
