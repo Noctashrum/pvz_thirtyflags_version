@@ -365,6 +365,13 @@ template <typename T> inline static void SyncDataArray(SaveGameContext& theConte
 	theContext.SyncUint(theDataArray.mMaxUsedCount);
 	theContext.SyncUint(theDataArray.mSize);
 	theContext.SyncBytes(theDataArray.mBlock, theDataArray.mMaxUsedCount * sizeof(DataArray<T>::DataArrayItem));
+
+	// 【性能】活槽位图不在存档里（存档只同步 mBlock，其中含 mID），
+	// 所以读盘之后必须按 mID 重建，否则池的遍历会漏掉所有实体。
+	if (theContext.mReading)
+	{
+		theDataArray.DataArrayRebuildUsedBits();
+	}
 }
 
 //0x4819D0

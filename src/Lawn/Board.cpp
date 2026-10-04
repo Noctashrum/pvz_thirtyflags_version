@@ -2723,6 +2723,32 @@ int Board::PickRowForNewZombie(ZombieType theZombieType)
 			}
 		}
 	}
+	// 【健壮性·性能】所有行权重都为 0 时（该僵尸类型在所有行都不被允许，
+	// 例如只剩水域/黑幕行的组合），TodPickFromSmoothArray 会除以 0、
+	// 返回无意义结果，并且每次打两条断言（各一次磁盘写）。
+	// 这里先兜底：随机挑一个允许该类型的已解锁行。
+	{
+		float aTotalWeight = 0.0f;
+		for (int aRow = 0; aRow < MAX_GRID_SIZE_Y; aRow++)
+		{
+			aTotalWeight += mRowPickingArray[aRow].mWeight;
+		}
+		if (aTotalWeight <= 0.0f)
+		{
+			int aStart = Rand(MAX_GRID_SIZE_Y);
+			for (int i = 0; i < MAX_GRID_SIZE_Y; i++)
+			{
+				int aRow = (aStart + i) % MAX_GRID_SIZE_Y;
+				if (RowCanHaveZombieType(aRow, theZombieType) &&
+					(!ThirtyFlagsMode() || gThirtyFlags.IsRowUnlocked(aRow)))
+				{
+					return aRow;
+				}
+			}
+			return 0;
+		}
+	}
+
 	return TodPickFromSmoothArray(mRowPickingArray, MAX_GRID_SIZE_Y);
 }
 
@@ -7849,8 +7875,11 @@ void Board::Draw(Graphics* g)
 		ResetFPSStats();
 	}
 
+	// 【性能】夹住真正的绘制区间（与更新耗时、帧率等待区分开）
+	ThirtyFlagsPerfDrawBegin();
 	mDrawCount++;
 	DrawGameObjects(g);
+	ThirtyFlagsPerfDrawEnd(this);
 }
 
 //0x41AE60

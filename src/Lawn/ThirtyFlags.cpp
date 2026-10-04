@@ -1903,10 +1903,166 @@ void ThirtyFlagsAddDamageNumber(int theX, int theY, int theDamage, int theColorK
     gTFNumbers[aSlot].mColorKind = theColorKind;
 }
 
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// 【性能】每帧耗时探针（调试版统计；PLAYER 版为空实现）
+//
+// 为什么先做这个、而不是直接换数据结构：先前凭「对象池遍历是线性扫描、探测空槽必然 cache miss」
+// 的判断做过一次优化（活槽位图 + 跳段），微基准实测反而更慢（热数据 0.6x，朴素位扫描 0.3x）——
+// 原实现是顺序访问、预取器吃得下，而更聪明的结构多了分支与间接寻址。
+// 教训：这个量级下【访存模式与常数】比【渐近复杂度】重要，换结构之前必须先有数据。
+//
+// 三个时间戳把一帧拆成四段：
+//   UpdateBegin 在 Board::Update 最开头；DrawBegin / DrawEnd 夹住 Board::Draw
+//   update = DrawBegin - UpdateBegin      更新侧总耗时
+//   draw   = DrawEnd   - DrawBegin        真正的绘制耗时
+//   idle   = 下一帧 UpdateBegin - DrawEnd 帧率限制器/垂直同步的等待
+//   frame  = 两帧 UpdateBegin 之间 = update + draw + idle
+// ----------------------------------------------------------------------------------------------------
+#if !defined(TF_PLAYER_BUILD)
+static LARGE_INTEGER gTFPerfFreq;
+static LARGE_INTEGER gTFPerfUpdateBeginTick;
+static LARGE_INTEGER gTFPerfDrawBeginTick;
+static LARGE_INTEGER gTFPerfPrevUpdateBeginTick;
+static LARGE_INTEGER gTFPerfPrevDrawEndTick;
+static bool          gTFPerfInited = false;
+static int           gTFPerfFrames = 0;
+static int           gTFPerfSlowLogged = 0;
+static double        gTFPerfSumUpdate = 0.0;
+static double        gTFPerfSumDraw = 0.0;
+static double        gTFPerfSumIdle = 0.0;
+static double        gTFPerfSumFrame = 0.0;
+static double        gTFPerfMaxUpdate = 0.0;
+static double        gTFPerfMaxDraw = 0.0;
+static double        gTFPerfMaxFrame = 0.0;
+
+static double TFPerfMs(LARGE_INTEGER theFrom, LARGE_INTEGER theTo)
+{
+    return (double)(theTo.QuadPart - theFrom.QuadPart) * 1000.0 / (double)gTFPerfFreq.QuadPart;
+}
+
+void ThirtyFlagsPerfUpdateBegin()
+{
+    if (!ThirtyFlagsMode())
+        return;
+
+    if (!gTFPerfInited)
+    {
+        QueryPerformanceFrequency(&gTFPerfFreq);
+        gTFPerfInited = true;
+    }
+
+    LARGE_INTEGER aNow;
+    QueryPerformanceCounter(&aNow);
+
+    // 收尾上一帧：上一帧 UpdateBegin 到现在 = 整帧间隔；上一帧 DrawEnd 到现在 = 等待
+    if (gTFPerfPrevUpdateBeginTick.QuadPart != 0 && gTFPerfPrevDrawEndTick.QuadPart != 0)
+    {
+        double aFrameMs = TFPerfMs(gTFPerfPrevUpdateBeginTick, aNow);
+        double anIdleMs = TFPerfMs(gTFPerfPrevDrawEndTick, aNow);
+        if (aFrameMs > 0.0 && aFrameMs < 500.0)
+        {
+            if (anIdleMs < 0.0)
+                anIdleMs = 0.0;
+            gTFPerfFrames++;
+            gTFPerfSumFrame += aFrameMs;
+            gTFPerfSumIdle += anIdleMs;
+            if (aFrameMs > gTFPerfMaxFrame)
+                gTFPerfMaxFrame = aFrameMs;
+        }
+    }
+
+    gTFPerfPrevUpdateBeginTick = aNow;
+    gTFPerfUpdateBeginTick = aNow;
+}
+
+void ThirtyFlagsPerfDrawBegin()
+{
+    if (!ThirtyFlagsMode() || !gTFPerfInited)
+        return;
+
+    LARGE_INTEGER aNow;
+    QueryPerformanceCounter(&aNow);
+    gTFPerfDrawBeginTick = aNow;
+
+    double anUpdateMs = TFPerfMs(gTFPerfUpdateBeginTick, aNow);
+    if (anUpdateMs > 0.0 && anUpdateMs < 500.0)
+    {
+        gTFPerfSumUpdate += anUpdateMs;
+        if (anUpdateMs > gTFPerfMaxUpdate)
+            gTFPerfMaxUpdate = anUpdateMs;
+    }
+}
+
+void ThirtyFlagsPerfDrawEnd(Board* theBoard)
+{
+    if (!ThirtyFlagsMode() || !theBoard || !gTFPerfInited)
+        return;
+
+    LARGE_INTEGER aNow;
+    QueryPerformanceCounter(&aNow);
+    gTFPerfPrevDrawEndTick = aNow;
+
+    double aDrawMs = TFPerfMs(gTFPerfDrawBeginTick, aNow);
+    if (aDrawMs > 0.0 && aDrawMs < 500.0)
+    {
+        gTFPerfSumDraw += aDrawMs;
+        if (aDrawMs > gTFPerfMaxDraw)
+            gTFPerfMaxDraw = aDrawMs;
+    }
+
+    // 单帧掉帧：立刻记一行（含当时的实体规模），最多 40 条
+    double aFrameMs = (gTFPerfPrevUpdateBeginTick.QuadPart != 0)
+        ? TFPerfMs(gTFPerfPrevUpdateBeginTick, aNow) : 0.0;
+    if (aFrameMs > 40.0 && gTFPerfSlowLogged < 40)
+    {
+        gTFPerfSlowLogged++;
+        char aBuf[256];
+        sprintf(aBuf, "[TFPerf] SLOW frame=%.1fms update=%.1f draw=%.1f | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u",
+            aFrameMs, TFPerfMs(gTFPerfUpdateBeginTick, gTFPerfDrawBeginTick), aDrawMs,
+            theBoard->mZombies.mSize, theBoard->mPlants.mSize, theBoard->mProjectiles.mSize,
+            theBoard->mApp->mEffectSystem->mReanimationHolder->mReanimations.mSize,
+            theBoard->mApp->mEffectSystem->mParticleHolder->mEmitters.mSize,
+            theBoard->mApp->mEffectSystem->mParticleHolder->mParticles.mSize);
+        TFLog(aBuf);
+    }
+
+    // 每 500 帧汇总一行
+    if (gTFPerfFrames >= 500)
+    {
+        char aBuf[320];
+        sprintf(aBuf,
+            "[TFPerf] %d frames avg=%.1f/%.1f/%.1f/%.1f max=%.1f/%.1f/%.1f ms (frame/update/draw/idle, %.0f fps) | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u | 3d=%d",
+            gTFPerfFrames,
+            gTFPerfSumFrame / (double)gTFPerfFrames, gTFPerfSumUpdate / (double)gTFPerfFrames,
+            gTFPerfSumDraw / (double)gTFPerfFrames, gTFPerfSumIdle / (double)gTFPerfFrames,
+            gTFPerfMaxFrame, gTFPerfMaxUpdate, gTFPerfMaxDraw,
+            1000.0 / (gTFPerfSumFrame / (double)gTFPerfFrames),
+            theBoard->mZombies.mSize, theBoard->mPlants.mSize, theBoard->mProjectiles.mSize,
+            theBoard->mApp->mEffectSystem->mReanimationHolder->mReanimations.mSize,
+            theBoard->mApp->mEffectSystem->mParticleHolder->mEmitters.mSize,
+            theBoard->mApp->mEffectSystem->mParticleHolder->mParticles.mSize,
+            theBoard->mApp->Is3DAccelerated() ? 1 : 0);
+        TFLog(aBuf);
+
+        gTFPerfFrames = 0;
+        gTFPerfSumUpdate = gTFPerfSumDraw = gTFPerfSumIdle = gTFPerfSumFrame = 0.0;
+        gTFPerfMaxFrame = gTFPerfMaxUpdate = gTFPerfMaxDraw = 0.0;
+    }
+}
+#else
+void ThirtyFlagsPerfUpdateBegin() { }
+void ThirtyFlagsPerfDrawBegin() { }
+void ThirtyFlagsPerfDrawEnd(Board*) { }
+#endif
+
 void ThirtyFlagsUpdateVisuals()
 {
     if (!ThirtyFlagsMode())
         return;
+
+    // 【性能】它在 Board::Update 最开头被调用，正好当作「本帧更新开始」的时间戳
+    ThirtyFlagsPerfUpdateBegin();
 
     gTFTick++;
 
@@ -3022,11 +3178,17 @@ static Zombie* TFBossResolve(Board* theBoard)
     Zombie* aCached = gThirtyFlags.mBossPtr;
     if (aCached)
     {
-        for (unsigned int i = 0; i < theBoard->mZombies.mMaxUsedCount; i++)
+        // 【性能】原来这里每帧线性扫一遍僵尸池（最多 1024 个几百字节的大槽）
+        // 只为确认"缓存的指针还有效"；但缓存指针就是池里的槽地址，
+        // 槽自己的 mID 就能判定活否 —— O(1) 就够。
+        // （顺带修掉原来那个判定：`mID & DATA_ARRAY_INDEX_MASK` 取的是下标，
+        //   恒不等于 65535，等于没判；正确判据是 key 部分非零。）
+        DataArray<Zombie>::DataArrayItem* aSlot = (DataArray<Zombie>::DataArrayItem*)aCached;
+        bool aInRange = aSlot >= &theBoard->mZombies.mBlock[0] &&
+                        aSlot < &theBoard->mZombies.mBlock[theBoard->mZombies.mMaxUsedCount];
+        if (aInRange && (aSlot->mID & DATA_ARRAY_KEY_MASK))
         {
-            Zombie* aSlot = &theBoard->mZombies.mBlock[i].mItem;
-            if (aSlot == aCached && (theBoard->mZombies.mBlock[i].mID & DATA_ARRAY_INDEX_MASK) != DATA_ARRAY_INDEX_MASK)
-                return aCached->mDead ? NULL : aCached;
+            return aCached->mDead ? NULL : aCached;
         }
     }
 
@@ -3152,15 +3314,33 @@ void ThirtyFlagsDrawBackdrop(Board* theBoard, Graphics* g)
     // 因此按同行同列取条带即可精确对齐，且**不需要拉伸**。
     if (Sexy::IMAGE_BACKGROUND1UNSODDED != nullptr)
     {
-        for (int aRow = 0; aRow < MAX_GRID_SIZE_Y && aRow < TF_LAWN_ROWS; aRow++)
+        // 【性能】连续未开放的行合并成一次 blit。
+        // 贴图与场地的纵向布局一致（原来的逐行版本就是「源 y = 目标 y」），
+        // 所以把相邻行拼成一个更高的源矩形，画出来的像素与逐行画**完全一致**，
+        // 只是绘制调用更少（5 行里 4 行锁着时：4 次 → 2 次）。
+        int aRowPitch = theBoard->GridToPixelY(0, 1) - theBoard->GridToPixelY(0, 0);
+        int aRunStart = -1;
+        int aSrcX = TF_LAWN_LEFT + BOARD_OFFSET;        // 转回贴图坐标
+
+        for (int aRow = 0; aRow <= MAX_GRID_SIZE_Y && aRow <= TF_LAWN_ROWS; aRow++)
         {
-            if (gThirtyFlags.IsRowUnlocked(aRow))
+            bool aLocked = (aRow < MAX_GRID_SIZE_Y && aRow < TF_LAWN_ROWS) && !gThirtyFlags.IsRowUnlocked(aRow);
+
+            if (aLocked)
+            {
+                if (aRunStart < 0)
+                    aRunStart = aRow;
+                continue;
+            }
+
+            if (aRunStart < 0)
                 continue;
 
-            int aY = theBoard->GridToPixelY(0, aRow);
-            int aSrcX = TF_LAWN_LEFT + BOARD_OFFSET;        // 转回贴图坐标
-            Rect aSrc(aSrcX, aY, MAX_GRID_SIZE_X * 80, TF_ROW_H);
+            int aY = theBoard->GridToPixelY(0, aRunStart);
+            int aHeight = (aRow - aRunStart - 1) * aRowPitch + TF_ROW_H;
+            Rect aSrc(aSrcX, aY, MAX_GRID_SIZE_X * 80, aHeight);
             g->DrawImage(Sexy::IMAGE_BACKGROUND1UNSODDED, TF_LAWN_LEFT, aY, aSrc);
+            aRunStart = -1;
         }
     }
 

@@ -441,6 +441,12 @@ bool    ThirtyFlagsHasFlagZombieAlive(Board* theBoard);
 void    ThirtyFlagsAddMark(Zombie* theZombie, Board* theBoard);
 void    ThirtyFlagsAddCorrupt(Zombie* theZombie, Board* theBoard);
 bool    ThirtyFlagsIsPlantingIntoPumpkin(Board* theBoard, int theGridX, int theGridY, int theSeedType);
+
+// 【性能】每帧耗时探针（调试版记录，PLAYER 版为空实现）
+//   UpdateBegin: Board::Update 开头；DrawBegin/DrawEnd: 夹住 Board::Draw
+void    ThirtyFlagsPerfUpdateBegin();
+void    ThirtyFlagsPerfDrawBegin();
+void    ThirtyFlagsPerfDrawEnd(Board* theBoard);
 int     ThirtyFlagsGetCorrupt(Zombie* theZombie, Board* theBoard);
 int     ThirtyFlagsHarvestPercent(Zombie* theZombie, Board* theBoard);
 int     ThirtyFlagsGetMark(Zombie* theZombie, Board* theBoard);   // 战旗光环：场上是否有旗帜僵尸

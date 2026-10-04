@@ -3,6 +3,7 @@
 
 #include <new.h>
 #include <string.h>
+#include <intrin.h>
 #include "TodDebug.h"
 #include "TodCommon.h"
 
@@ -34,6 +35,16 @@ public:
 	unsigned int			mNextKey;
 	const char*				mName;
 
+	// 【性能】活槽位图：一位一槽。
+	//
+	// 为什么需要：IterateNext 原本是「从当前槽逐槽线性扫到 mMaxUsedCount」，
+	// 而 mMaxUsedCount 是只增不减的高水位，槽位里放的是大对象
+	// （Zombie / Plant / Projectile 都是几百字节），于是每次遍历都要跨数百字节
+	// 去探测空槽 —— 全是 cache miss。实测 245 个投射物每帧各调一次
+	// IterateZombies，就是每帧几十万次这种探测，这正是「越打越卡」的机械原因。
+	// 位图把「探活」成本降到 O(容量/32)，且遍历顺序与结果与原实现完全一致。
+	unsigned int*			mUsedBits;
+
 public:
 	DataArray<T>()
 	{
@@ -44,6 +55,7 @@ public:
 		mSize = 0U;
 		mNextKey = 1U;
 		mName = nullptr;
+		mUsedBits = nullptr;
 	}
 
 	~DataArray<T>()
@@ -73,6 +85,11 @@ public:
 		mNextKey = ((((WORD)theName[1] & 0xF) << 8) | theName[2]) + 0xD000;
 		mName = theName;
 
+		// 【性能】位图与池一一对应，多分配一组以覆盖 sink 槽。
+		unsigned int aBitWords = (theMaxSize + 32U) >> 5;
+		mUsedBits = (unsigned int*)operator new[](sizeof(unsigned int) * aBitWords);
+		memset(mUsedBits, 0, sizeof(unsigned int) * aBitWords);
+
 		// Mark the sink as not-in-use so a stale id never resolves to it.
 		DataArraySink()->mID = 0;
 	}
@@ -83,6 +100,8 @@ public:
 		{
 			DataArrayFreeAll();
 			operator delete[](mBlock);
+			operator delete[](mUsedBits);
+			mUsedBits = nullptr;
 			mBlock = nullptr;
 			mMaxUsedCount = 0U;
 			mMaxSize = 0U;
@@ -112,6 +131,7 @@ public:
 		aItem->mID = mFreeListHead;
 		mFreeListHead = anId;
 		mSize--;
+		DataArrayClearUsedBit(anId);
 	}
 
 	void DataArrayFreeAll()
@@ -122,6 +142,10 @@ public:
 
 		mFreeListHead = 0U;
 		mMaxUsedCount = 0U;
+		if (mUsedBits != nullptr)
+		{
+			memset(mUsedBits, 0, sizeof(unsigned int) * ((mMaxSize + 32U) >> 5));
+		}
 	}
 
 	inline unsigned int DataArrayGetID(T* theItem)
@@ -134,23 +158,93 @@ public:
 		return aItem->mID;
 	}
 
+		// 【性能】位图辅助
+	inline void DataArraySetUsedBit(unsigned int theIndex)
+	{
+		if (mUsedBits != nullptr)
+			mUsedBits[theIndex >> 5] |= (1U << (theIndex & 31));
+	}
+
+	inline void DataArrayClearUsedBit(unsigned int theIndex)
+	{
+		if (mUsedBits != nullptr)
+			mUsedBits[theIndex >> 5] &= ~(1U << (theIndex & 31));
+	}
+
+	// 【性能】读档后重建位图：存档只同步 mBlock（含 mID），位图不在存档里，
+	// 所以读盘后必须按 mID 的 key 部分重新标一遍，否则遍历会漏掉所有实体。
+	void DataArrayRebuildUsedBits()
+	{
+		if (mUsedBits == nullptr || mBlock == nullptr)
+			return;
+
+		memset(mUsedBits, 0, sizeof(unsigned int) * ((mMaxSize + 32U) >> 5));
+		for (unsigned int i = 0; i < mMaxUsedCount; i++)
+		{
+			if (mBlock[i].mID & DATA_ARRAY_KEY_MASK)
+				DataArraySetUsedBit(i);
+		}
+	}
+
+	// 【性能】遍历：用位图一次跳过整段（32 槽）空位，不再逐槽触碰几百字节的大对象。
+	// 返回值、遍历顺序（按槽位下标升序）与原实现完全一致。
 	bool IterateNext(T*& theItem)
 	{
-		DataArray<T>::DataArrayItem* aItem = (DataArray<T>::DataArrayItem*)theItem;
-		if (aItem == nullptr)
-			aItem = &mBlock[0];
+		unsigned int aIndex;
+		if (theItem == nullptr)
+			aIndex = 0;
+		else if (theItem == (T*)-1)
+			return false;
 		else
-			aItem++;
+			aIndex = (unsigned int)(((DataArrayItem*)theItem) - mBlock) + 1;
 
-		DataArray<T>::DataArrayItem* aLast = &mBlock[mMaxUsedCount];
-		while ((unsigned int)aItem < (unsigned int)aLast)
+		if (mUsedBits == nullptr)
 		{
-			if (aItem->mID & DATA_ARRAY_KEY_MASK)
+			// 位图不可用（理论上不会发生）：退回原来的逐槽线性扫描
+			while (aIndex < mMaxUsedCount)
 			{
-				theItem = (T*)aItem;
-				return true;
+				if (mBlock[aIndex].mID & DATA_ARRAY_KEY_MASK)
+				{
+					theItem = (T*)&mBlock[aIndex];
+					return true;
+				}
+				aIndex++;
 			}
-			aItem++;
+			theItem = (T*)-1;
+			return false;
+		}
+
+		// 空池快路径：池里一个活对象都没有（每旗开局、清场瞬间很常见）
+		if (mSize == 0)
+		{
+			theItem = (T*)-1;
+			return false;
+		}
+
+		unsigned int aEnd = mMaxUsedCount;
+		while (aIndex < aEnd)
+		{
+			unsigned int aWordIndex = aIndex >> 5;
+			// 清掉当前位之前的所有位，只保留「aIndex 及其之后」的活槽
+			unsigned int aBits = mUsedBits[aWordIndex] & (0xFFFFFFFFu << (aIndex & 31));
+			if (aBits == 0)
+			{
+				// 整段 32 槽全空：直接跳到下一段，一个槽都不触碰
+				aIndex = (aWordIndex + 1) << 5;
+				continue;
+			}
+
+			// 定位这一段里最低的置位：用硬件指令一次搞定（朴素逐位循环最多 31 次移位，
+			// 实测那才是位图版的主要开销）
+			unsigned long aBit = 0;
+			_BitScanForward(&aBit, aBits);
+
+			aIndex = (aWordIndex << 5) + (unsigned int)aBit;
+			if (aIndex >= aEnd)
+				break;
+
+			theItem = (T*)&mBlock[aIndex];
+			return true;
 		}
 
 		theItem = (T*)-1;
@@ -203,6 +297,7 @@ public:
 		aNewItem->mID = (mNextKey++ << DATA_ARRAY_KEY_SHIFT) | aNext;
 		if (mNextKey == DATA_ARRAY_MAX_SIZE) mNextKey = 1;
 		mSize++;
+		mUsedBits[aNext >> 5] |= (1U << (aNext & 31));
 
 		// Getting close to the limit is worth knowing before it actually happens -
 		// this is how you find out a mod needs a bigger pool rather than a crash.

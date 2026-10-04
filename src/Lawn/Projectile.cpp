@@ -1315,9 +1315,19 @@ void Projectile::ConvertToFireball(int theGridX)
 	if (mHitTorchwoodGridX == theGridX)
 		return;
 
+	// 【性能·实测反馈】同格多个树桩（叠种火炬）会多次调用本函数，把伤害/元素逐层叠上去；
+	// 但**火焰表现只需要一份** —— 原本每次调用都新建一条 REANIM_FIRE_PEA 骨骼动画，
+	// 于是同一颗豌豆在 3 层叠种格里会养 3 条骨骼动画（再乘上多格火炬、机枪 4 发/轮，
+	// 就是「越打越卡」「物品创建暴涨」的来源之一）。
+	// 这里：状态照旧更新（伤害/元素叠加完全不变），只是在「已经是火球」时跳过重复的表现创建。
+	bool aAlreadyFire = (mProjectileType == ProjectileType::PROJECTILE_FIREBALL);
+
 	mProjectileType = ProjectileType::PROJECTILE_FIREBALL;
 	mHitTorchwoodGridX = theGridX;
 	mApp->PlayFoley(FoleyType::FOLEY_FIREPEA);
+
+	if (aAlreadyFire)
+		return;
 
 	float aOffsetX = -25.0f;
 	float aOffsetY = -25.0f;
