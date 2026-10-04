@@ -118,6 +118,10 @@ constexpr int   TF_FIELD_RIGHT_X        = 760;
 // 辣椒头僵尸在场外时，引爆计时不会被推进到低于这个帧数 ——
 // 等价于「计时只在场内走」，保证它引爆时一定在场上、且还有完整的接近窗口。
 constexpr int   TF_JALAPENO_MIN_FUSE    = 700;
+constexpr int   TF_FLAG_ZOMBIE_CYCLE   = 150;  // 旗帜僵尸射击周期（帧，一轮 4 发）
+// 【三十旗】旗帜僵尸「战争之王」的护甲（用户口径：高坚果护甲 = 高坚果那 8000 血）
+constexpr int   TF_FLAG_ARMOR_TALLNUT   = 8000; // 高坚果护甲（本体血量）
+constexpr int   TF_FLAG_ARMOR_HELMET    = 1400; // 橄榄球头盔（= 原版 ZOMBIE_FOOTBALL 的 1400）
 constexpr int   TF_BURST_MAX            = 12;    // 处决爆发环并发上限
 constexpr int   TF_BURST_LIFE           = 30;    // 处决爆发环存活帧数
 constexpr int   TF_FREEZE_MAX_FRAMES    = 12;    // 单次顿帧上限（帧，只冻结表现层）

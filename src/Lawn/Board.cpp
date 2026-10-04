@@ -3040,6 +3040,14 @@ PlantingReason Board::CanPlantAt(int theGridX, int theGridY, SeedType theSeedTyp
 			Plant* aScanPlant = nullptr;
 			while (IteratePlants(aScanPlant))
 			{
+				// 【三十旗】睡莲 / 花盆属于「底座层」，不算叠种的 3 株之一 ——
+				// 否则水路上「睡莲 + 南瓜 + 植物」就已经占满 3 格，水面永远叠不了。
+				if (aScanPlant->mSeedType == SeedType::SEED_LILYPAD ||
+					aScanPlant->mSeedType == SeedType::SEED_FLOWERPOT)
+				{
+					continue;
+				}
+
 				if (aScanPlant->mPlantCol == theGridX && aScanPlant->mRow == theGridY &&
 					aScanPlant->mPlantHealth > 0)
 				{
@@ -7646,6 +7654,13 @@ void Board::UpdateFog()
 	if (!StageHasFog())
 		return;
 
+	// 【三十旗】三十旗的迷雾由 ThirtyFlagsSetupBoard 按本旗配置（右侧 mFogCols 列）
+	// 直接写进 mGridCelFog，是「持续迷雾」；这里直接返回，避免原版那套
+	// 「LeftFogColumn 起的逐帧淡入 + 植物周围自动开雾」把配置改掉
+	// （非冒险模式下 LeftFogColumn 固定返回 5，会把 3 列雾变成 4 列）。
+	if (ThirtyFlagsMode())
+		return;
+
 	//int aFogFadeInSpeed = mFogBlownCountDown >= 2000 ? 20 : mFogBlownCountDown > 0 ? 1 : 3;
 	int aFogFadeInSpeed = 3;
 	if (mFogBlownCountDown > 0 && mFogBlownCountDown < 2000)
@@ -9206,7 +9221,13 @@ bool Board::StageHasZombieWalkInFromRight()
 //0x41C170
 bool Board::StageHasFog()
 {
-	return !mApp->IsStormyNightLevel() && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_INVISIGHOUL && mBackground == BackgroundType::BACKGROUND_4_FOG;
+	// 【三十旗】白天草坪也可以有雾：只要本旗配置了迷雾列就算「有雾关卡」。
+	// 否则 DrawFog 的渲染项永远不会被注册（ThirtyFlagsSetupBoard 把雾写进了
+	// mGridCelFog，却没有任何人画它），路灯花也会因为「本关没雾」而无法使用。
+	// 原版判定只认 BACKGROUND_4_FOG（雾天场景）。
+	return !mApp->IsStormyNightLevel() && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_INVISIGHOUL &&
+		(mBackground == BackgroundType::BACKGROUND_4_FOG ||
+		 (ThirtyFlagsMode() && gThirtyFlags.mFogCols > 0));
 }
 
 //0x41C1C0

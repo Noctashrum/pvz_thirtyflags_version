@@ -1217,14 +1217,15 @@ void ThirtyFlagsZombieInit(Zombie* theZombie)
     // 铁门（原生 shield：弹孔/破损动画）。外加战旗光环与死亡召兵（指挥官机制）。
     if (theZombie->mZombieType == ZombieType::ZOMBIE_FLAG)
     {
-        theZombie->mBodyHealth *= 2;
-        // 高坚果颅甲：本体厚血（原版高坚果就是高本体血量的定位）
-        theZombie->mBodyHealth += 4000;
-        theZombie->mBodyMaxHealth = theZombie->mBodyHealth;
+        // 高坚果护甲（用户口径：= 高坚果那 8000 血）：直接给足 8000，
+        // 之前是「本体 x2 再 +4000」= 5000，实测偏低。
+        theZombie->mBodyHealth = TF_FLAG_ARMOR_TALLNUT;
+        theZombie->mBodyMaxHealth = TF_FLAG_ARMOR_TALLNUT;
         // 橄榄球帽防具：原生 helm 系统（用户需求：铁桶换成橄榄球头盔）
         theZombie->mHelmType = HelmType::HELMTYPE_FOOTBALL;
-        theZombie->mHelmHealth = 1400;
-        theZombie->mHelmMaxHealth = 1400;
+        // 原版橄榄球僵尸的头盔就是 1400（见 Zombie.cpp 的 ZOMBIE_FOOTBALL 初始化），不是 1700+
+        theZombie->mHelmHealth = TF_FLAG_ARMOR_HELMET;
+        theZombie->mHelmMaxHealth = TF_FLAG_ARMOR_HELMET;
         // 铁门防具：原生 shield 系统（受击弹孔/破损帧）
         theZombie->mShieldType = ShieldType::SHIELDTYPE_DOOR;
         theZombie->mShieldHealth = 1100;
@@ -1467,6 +1468,36 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
     if (theZombie->IsDeadOrDying() || !theZombie->IsOnBoard())
         return;
 
+    // 【三十旗】旗帜僵尸「战争之王」：边扛旗边开枪。
+    //
+    // 自己实现，不再借用 UpdateZombieGatlingHead()：那个函数会对
+    // mSpecialHeadReanimID 调 PlayReanim("anim_shooting"/"anim_head_idle")，
+    // 而旗帜僵尸的"特殊头部"是旗子（REANIM_FLAG），没有这两条动画；
+    // 一旦该 id 失效（REANIMATIONID_NULL == 0）就会 ReanimationGet(0)
+    // → 断言 + 空指针访问（实测第 18 旗崩溃）。
+    if (theZombie->mZombieType == ZombieType::ZOMBIE_FLAG)
+    {
+        if (theZombie->mPhaseCounter <= 0)
+        {
+            theZombie->mPhaseCounter = TF_FLAG_ZOMBIE_CYCLE;
+        }
+
+        // 与机枪豌豆头同样的节奏：一轮 150 帧打 4 发，每发间隔 17 帧
+        int aC = theZombie->mPhaseCounter;
+        if (aC == TF_FLAG_ZOMBIE_CYCLE || aC == TF_FLAG_ZOMBIE_CYCLE - 17 ||
+            aC == TF_FLAG_ZOMBIE_CYCLE - 34 || aC == TF_FLAG_ZOMBIE_CYCLE - 51)
+        {
+            Projectile* aFlagPea = theZombie->mBoard->AddProjectile(
+                (int)theZombie->mPosX + 20, (int)theZombie->mPosY - 20,
+                theZombie->mRenderOrder, theZombie->mRow, ProjectileType::PROJECTILE_ZOMBIE_PEA);
+            if (aFlagPea)
+            {
+                aFlagPea->mMotionType = ProjectileMotion::MOTION_BACKWARDS;   // 朝左打植物
+            }
+            theZombie->mApp->PlayFoley(FoleyType::FOLEY_THROW);
+        }
+    }
+
     // 【三十旗·平衡】精英再生：原来是 % 10 —— mZombieAge 每帧 +1、后端 100 帧/秒，
     // 2% × 10 次/秒 = 每秒回复 20% 最大生命，远超设计稿「每秒 2%」，
     // 结果任何低 DPS 植物（忧郁菇/猫尾草 40 DPS）都完全打不动精英。
@@ -1546,6 +1577,12 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
                     aSpear->mHeight = 20;
                     aSpear->mRotation = 0.0f;
                     aSpear->mRotationSpeed = 0.0f;
+
+                    // 【三十旗】让这根矛真的看得见：原来没设运动模式，走的是
+                    // 「默认向右 3.33/frame」——也就是从僵尸身上朝僵尸堆里飞，
+                    // 而且几十帧就出界消失了，玩家基本看不到（实测反馈"没见过这个矛"）。
+                    // 改成 BACKWARDS（向左），朝着它刚刚刺中的植物方向飞出去。
+                    aSpear->mMotionType = ProjectileMotion::MOTION_BACKWARDS;
                 }
             }
             else

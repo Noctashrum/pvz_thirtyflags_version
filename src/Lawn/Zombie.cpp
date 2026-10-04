@@ -601,6 +601,28 @@ void Zombie::ZombieInitialize(int theRow, ZombieType theType, bool theVariant, Z
         aBodyReanim->mFrameBasePose = 0;
 
         mPosX = WIDE_BOARD_WIDTH;
+
+        // 【三十旗】战争之王（用户需求）：头上再长一个**真的机枪豌豆头**（纯视觉）。
+        // 只把机枪头挂到 anim_head1 轨道上，**不占用 mSpecialHeadReanimID** ——
+        // 那个槽位是旗子的（DropFlag 要按它 RemoveReanimation），抢过来会让
+        // 机枪头的 PlayReanim 打到旗子动画上，且 id 失效时直接崩（实测第 18 旗）。
+        // 射击节奏由 ThirtyFlagsZombieUpdate 实现（与机枪头同节奏：150 帧 4 发）。
+        if (ThirtyFlagsMode())
+        {
+            ReanimShowPrefix("anim_hair", RENDER_GROUP_HIDDEN);
+
+            ReanimatorTrackInstance* aHeadTrack = aBodyReanim->GetTrackInstanceByName("anim_head1");
+            if (aHeadTrack != nullptr)
+            {
+                aHeadTrack->mImageOverride = IMAGE_BLANK;
+                Reanimation* aGatlingHead = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_GATLINGPEA);
+                aGatlingHead->PlayReanim("anim_head_idle", ReanimLoopType::REANIM_LOOP, 0, 15.0f);
+                AttachEffect* aHeadAttach = AttachReanim(aHeadTrack->mAttachmentID, aGatlingHead, 0.0f, 0.0f);
+                aBodyReanim->mFrameBasePose = 0;
+                TodScaleRotateTransformMatrix(aHeadAttach->mOffset, 65.0f, -5.0f, 0.2f, -1.0f, 1.0f);
+            }
+        }
+
         break;
     }
 
@@ -3440,6 +3462,9 @@ void Zombie::DropFlag()
         return;
 
     mApp->RemoveReanimation(mSpecialHeadReanimID);
+    // 【三十旗】旗子已移除，id 必须置空：否则后面任何 ReanimationGet(mSpecialHeadReanimID)
+    // 都会拿到失效 id（断言 + 空指针访问）
+    mSpecialHeadReanimID = ReanimationID::REANIMATIONID_NULL;
     ReanimShowPrefix("anim_innerarm", RENDER_GROUP_NORMAL);
     ReanimShowTrack("Zombie_flaghand", RENDER_GROUP_HIDDEN);
     ReanimShowTrack("Zombie_innerarm_screendoor", RENDER_GROUP_HIDDEN);
@@ -4538,12 +4563,12 @@ void Zombie::UpdateActions()
     {
         UpdateZombieGatlingHead();
     }
-    // 【三十旗】旗帜僵尸（用户需求）：“同时是机枪僵尸的 id”——走官方机枪头射击 AI
-    //（GATLING_HEAD 的 reanim 同为 REANIM_ZOMBIE，轨道/弹道起点完全兼容）
-    if (mZombieType == ZombieType::ZOMBIE_FLAG && ThirtyFlagsMode())
-    {
-        UpdateZombieGatlingHead();
-    }
+    // 【三十旗】旗帜僵尸的射击改由 ThirtyFlagsZombieUpdate 自己实现（见 ThirtyFlags.cpp）。
+    // 之前这里调用 UpdateZombieGatlingHead()，但它会对 mSpecialHeadReanimID 调
+    // PlayReanim("anim_shooting") / ("anim_head_idle")——那是机枪豌豆头的动画；
+    // 旗帜僵尸的“特殊头部”其实是旗子（REANIM_FLAG），没有这两条动画；
+    // 更致命的是该 id 一旦失效（REANIMATIONID_NULL == 0）就会 ReanimationGet(0)
+    // → 断言 + 空指针访问（实测第 18 旗崩溃）。
     if (mZombieType == ZombieType::ZOMBIE_SQUASH_HEAD)
     {
         UpdateZombieSquashHead();
