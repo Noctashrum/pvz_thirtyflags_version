@@ -2446,6 +2446,29 @@ void Zombie::UpdateZombieJalapenoHead()
     if (!mHasHead)
         return;
 
+    // 【三十旗·平衡】场外不引爆（用户实测反馈）。
+    //
+    // 引爆是「帧计时」：Update() 里 `if (mPhaseCounter > 0 && !IsImmobilizied()) mPhaseCounter--;`
+    // 不管它在走路、还是在原地啃植物，计时都照走。于是只要它被魅惑僵尸挡在场外
+    // （x > TF_FIELD_RIGHT_X，植物够不到的位置）啃住，就会在**场外**把一整行植物清掉，
+    // 玩家既看不见也打不着，完全无法反制。
+    //
+    // 修法：让计时只在「场内」推进 —— 场外时把计时夹在 TF_JALAPENO_MIN_FUSE 以上。
+    // 这样它一定是走进场地之后、且还剩完整接近窗口时才引爆。
+    if (ThirtyFlagsMode() && mPosX > TF_FIELD_RIGHT_X && mPhaseCounter < TF_JALAPENO_MIN_FUSE)
+    {
+        // 只在「这一下真的差点引爆」时落日志：方便查证这个修复是否生效
+        if (mPhaseCounter <= 1)
+        {
+            char aBuf[128];
+            sprintf(aBuf, "[TFPlant] jalapeno ignition DEFERRED (offboard x=%d)", (int)mPosX);
+            TFLog(aBuf);
+        }
+
+        mPhaseCounter = TF_JALAPENO_MIN_FUSE;
+        return;
+    }
+
     if (mPhaseCounter == 0)
     {
         mApp->PlayFoley(FoleyType::FOLEY_JALAPENO_IGNITE);
@@ -6481,6 +6504,13 @@ Zombie* Zombie::FindZombieTarget()
             !aZombie->IsDeadOrDying() && 
             aZombie->mRow == mRow)
         {
+            // 【三十旗·平衡】魅惑僵尸不在场外开战（用户实测反馈）。
+            // 场外是植物够不到的区域：在那里和敌人互啃，会把敌人永久卡在
+            // 玩家看不见也打不着的地方（辣椒头僵尸还会因此在场外炸掉一整行）。
+            // 忽略场外目标后，敌人会正常走进场地，战斗发生在植物能参与的位置。
+            if (ThirtyFlagsMode() && aZombie->mPosX > TF_FIELD_RIGHT_X)
+                continue;
+
             Rect aZombieRect = aZombie->GetZombieRect();
             int aOverlap = GetRectOverlap(aAttackRect, aZombieRect);
             if (aOverlap >= 20 || (aOverlap > 0 && aZombie->mIsEating))
