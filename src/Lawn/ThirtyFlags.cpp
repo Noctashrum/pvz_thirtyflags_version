@@ -1936,6 +1936,13 @@ static double        gTFPerfMaxUpdate = 0.0;
 static double        gTFPerfMaxDraw = 0.0;
 static double        gTFPerfMaxFrame = 0.0;
 
+// 【性能】框架渲染器提供的精灵统计（D3DInterface.cpp）。
+// 这里只做声明，不引 D3DInterface.h —— 那头文件会拖进 d3d8 的头，与 Lawn 侧冲突。
+void D3DInterfaceGetSpriteStats(unsigned int* theQuads, unsigned int* theCalls);
+
+static unsigned int gTFPerfSpriteQuads = 0;   // 【性能】本帧精灵四边形数
+static unsigned int gTFPerfSpriteCalls = 0;   // 【性能】本帧实际绘制调用次数
+
 static double TFPerfMs(LARGE_INTEGER theFrom, LARGE_INTEGER theTo)
 {
     return (double)(theTo.QuadPart - theFrom.QuadPart) * 1000.0 / (double)gTFPerfFreq.QuadPart;
@@ -2011,6 +2018,9 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
             gTFPerfMaxDraw = aDrawMs;
     }
 
+    // 【性能】取本帧精灵绘制统计（读取即清零）：四边形数 / 实际绘制调用次数
+    D3DInterfaceGetSpriteStats(&gTFPerfSpriteQuads, &gTFPerfSpriteCalls);
+
     // 单帧掉帧：立刻记一行（含当时的实体规模），最多 40 条
     double aFrameMs = (gTFPerfPrevUpdateBeginTick.QuadPart != 0)
         ? TFPerfMs(gTFPerfPrevUpdateBeginTick, aNow) : 0.0;
@@ -2032,7 +2042,7 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
     {
         char aBuf[320];
         sprintf(aBuf,
-            "[TFPerf] %d frames avg=%.1f/%.1f/%.1f/%.1f max=%.1f/%.1f/%.1f ms (frame/update/draw/idle, %.0f fps) | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u | 3d=%d",
+            "[TFPerf] %d frames avg=%.1f/%.1f/%.1f/%.1f max=%.1f/%.1f/%.1f ms (frame/update/draw/idle, %.0f fps) | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u | sprite=%u/%u 3d=%d",
             gTFPerfFrames,
             gTFPerfSumFrame / (double)gTFPerfFrames, gTFPerfSumUpdate / (double)gTFPerfFrames,
             gTFPerfSumDraw / (double)gTFPerfFrames, gTFPerfSumIdle / (double)gTFPerfFrames,
@@ -2042,6 +2052,7 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
             theBoard->mApp->mEffectSystem->mReanimationHolder->mReanimations.mSize,
             theBoard->mApp->mEffectSystem->mParticleHolder->mEmitters.mSize,
             theBoard->mApp->mEffectSystem->mParticleHolder->mParticles.mSize,
+            gTFPerfSpriteQuads, gTFPerfSpriteCalls,
             theBoard->mApp->Is3DAccelerated() ? 1 : 0);
         TFLog(aBuf);
 

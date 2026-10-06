@@ -60,6 +60,41 @@ cpps = re.findall(r'<ClCompile Include="([^"]+)"', proj)
 cpps = [os.path.normpath(os.path.join(SRC, 'Lawn', c)) for c in cpps]
 print('工程源文件数:', len(cpps))
 
+# ---- 1.5 框架 unity 目标（历史坑）----
+# SexyAppFramework 是**预编译 unity 构建**：GraphicsBuild.cpp 里 #include 了
+# D3DInterface.cpp / Graphics.cpp / DDImage.cpp 等，且这套源文件**不在 Lawn.vcxproj 里**。
+# 所以：改了框架源码（例如渲染器 D3DInterface.cpp），必须重建对应的 unity obj，
+# 否则链接进去的还是旧实现 —— 改了等于没改（而且不会有任何报错）。
+# 依赖判定：unity obj 比 unity cpp 旧，或比它任意 #include 的 cpp 旧，或比任一框架头新。
+FW_DIR = os.path.join(SRC, 'SexyAppFramework')
+FW_UNITY = ['GraphicsBuild', 'MiscBuildBase', 'SoundBuild', 'WidgetBuildBase', 'SexyAppBase', 'SexyApp']
+fw_headers = glob.glob(os.path.join(FW_DIR, '*.h')) + glob.glob(os.path.join(FW_DIR, 'TodLib', '*.h'))
+newest_fw_header = max([os.path.getmtime(h) for h in fw_headers], default=0)
+fw_stale = []
+for u in FW_UNITY:
+    c = os.path.join(FW_DIR, u + '.cpp')
+    o = os.path.join(FWDIR, u + '.obj')
+    if not os.path.exists(c) or not os.path.exists(o):
+        continue
+    mt = os.path.getmtime(c)
+    for dep in glob.glob(os.path.join(FW_DIR, '*.cpp')):
+        if os.path.getmtime(dep) > mt:
+            mt = os.path.getmtime(dep)
+    if mt > os.path.getmtime(o) or newest_fw_header > os.path.getmtime(o):
+        fw_stale.append((c, o))
+if fw_stale:
+    print('框架 unity 需重编:', ', '.join(os.path.basename(c) for c, _ in fw_stale))
+    for c, o in fw_stale:
+        r = subprocess.run([CL] + BASEFLAGS + ['-Fo' + o, c], cwd=FW_DIR, env=env,
+                           capture_output=True, text=True, errors='replace')
+        errs = [l for l in (r.stdout or '').splitlines() if 'error C' in l]
+        if r.returncode != 0 or errs:
+            print('  FAIL', os.path.basename(c))
+            for e in errs[:5]:
+                print('     ', e)
+            print('框架编译失败，终止'); sys.exit(1)
+        print('  ok  ', os.path.basename(c))
+
 # ---- 2. 找出过期的 obj（obj 不存在或 cpp 更新，或任一头文件比 obj 新）----
 headers = glob.glob(os.path.join(SRC, 'Lawn', '*.h')) + glob.glob(os.path.join(SRC, 'TodLib', '*.h'))
 newest_header = max(os.path.getmtime(h) for h in headers)

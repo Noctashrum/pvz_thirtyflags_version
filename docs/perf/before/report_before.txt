@@ -1,0 +1,130 @@
+start 23:57:31
+launched pid=22732 (silent)
+hwnd=723650 (shown without activation)
+started: [1791302344] [TFPerf] 500 frames avg=9.8/0.2/1.9/8.2 max=40.1/6.8/15.7 ms (frame/update/draw/idle, 102 fps) | z=0 pl=0 pr=0 reanim=1 emit=8 part=0 | 3d=1
+---- [A 空场基线 20s] TFPerf lines ----
+[1791302344] [TFPerf] 500 frames avg=9.8/0.2/1.9/8.2 max=40.1/6.8/15.7 ms (frame/update/draw/idle, 102 fps) | z=0 pl=0 pr=0 reanim=1 emit=8 part=0 | 3d=1
+---- [A 空场基线 20s] TFPerf lines ----
+[1791302349] [TFPerf] 500 frames avg=10.0/0.1/0.3/9.8 max=38.8/1.4/0.7 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=1 emit=0 part=0 | 3d=1
+[1791302354] [TFPerf] 500 frames avg=10.0/0.2/0.3/9.6 max=25.6/3.6/0.6 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=2 emit=0 part=0 | 3d=1
+[1791302359] [TFPerf] 500 frames avg=10.0/0.2/0.3/9.6 max=19.1/1.5/0.8 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=3 emit=0 part=0 | 3d=1
+[1791302364] [TFPerf] 500 frames avg=10.0/0.2/1.6/8.4 max=27.1/2.5/20.9 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=8 emit=0 part=0 | 3d=1
+after 3 flags: [1791302416] [TFPerf] 500 frames avg=10.0/0.2/2.4/7.4 max=29.3/6.9/21.8 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=10 emit=0 part=0 | 3d=1
+---- [B 铺满(q) 30s] TFPerf lines ----
+[1791302344] [TFPerf] 500 frames avg=9.8/0.2/1.9/8.2 max=40.1/6.8/15.7 ms (frame/update/draw/idle, 102 fps) | z=0 pl=0 pr=0 reanim=1 emit=8 part=0 | 3d=1
+[1791302349] [TFPerf] 500 frames avg=10.0/0.1/0.3/9.8 max=38.8/1.4/0.7 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=1 emit=0 part=0 | 3d=1
+[1791302354] [TFPerf] 500 frames avg=10.0/0.2/0.3/9.6 max=25.6/3.6/0.6 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=2 emit=0 part=0 | 3d=1
+[1791302359] [TFPerf] 500 frames avg=10.0/0.2/0.3/9.6 max=19.1/1.5/0.8 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=3 emit=0 part=0 | 3d=1
+[1791302364] [TFPerf] 500 frames avg=10.0/0.2/1.6/8.4 max=27.1/2.5/20.9 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=8 emit=0 part=0 | 3d=1
+[1791302369] [TFPerf] 500 frames avg=10.0/0.2/2.3/7.6 max=29.8/3.6/21.4 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302374] [TFPerf] 500 frames avg=10.0/0.1/4.0/7.2 max=41.9/2.4/28.4 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302379] [TFPerf] 500 frames avg=10.0/0.1/4.5/5.6 max=25.3/1.0/22.1 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=42 emit=0 part=0 | 3d=1
+[1791302384] [TFPerf] 500 frames avg=10.0/0.1/1.9/8.0 max=12.4/6.9/6.4 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=9 emit=0 part=0 | 3d=1
+[1791302388] [TFPerf] SLOW frame=45.4ms update=0.1 draw=45.3 | z=31 pl=0 pr=0 reanim=41 emit=0 part=0
+[1791302389] [TFPerf] 500 frames avg=10.0/0.1/3.1/8.1 max=50.2/1.2/45.3 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302392] [TFPerf] SLOW frame=40.7ms update=0.0 draw=40.6 | z=31 pl=0 pr=0 reanim=41 emit=0 part=0
+[1791302393] [TFPerf] SLOW frame=43.5ms update=0.2 draw=43.2 | z=31 pl=0 pr=0 reanim=41 emit=0 part=0
+[1791302394] [TFPerf] 500 frames avg=10.0/0.1/5.4/6.5 max=50.8/0.8/43.2 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302401] [TFPerf] 500 frames avg=10.0/0.1/3.5/11.6 max=37.1/2.5/34.0 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=8 emit=0 part=0 | 3d=1
+[1791302406] [TFPerf] 500 frames avg=10.0/0.1/3.1/9.0 max=52.6/2.4/26.2 ms (frame/update/draw/idle, 100 fps) | z=30 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302411] [TFPerf] 500 frames avg=10.0/0.2/3.5/6.3 max=13.1/1.8/8.6 ms (frame/update/draw/idle, 100 fps) | z=30 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302416] [TFPerf] 500 frames avg=10.0/0.2/2.4/7.4 max=29.3/6.9/21.8 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=10 emit=0 part=0 | 3d=1
+[1791302421] [TFPerf] 500 frames avg=10.0/0.3/2.1/7.6 max=18.1/8.5/13.1 ms (frame/update/draw/idle, 100 fps) | z=35 pl=18 pr=12 reanim=114 emit=10 part=67 | 3d=1
+[1791302426] [TFPerf] 500 frames avg=10.0/0.6/4.9/4.6 max=22.6/2.5/17.6 ms (frame/update/draw/idle, 100 fps) | z=36 pl=17 pr=18 reanim=112 emit=36 part=169 | 3d=1
+---- [B 铺满(q) 30s] TFPerf lines ----
+[1791302431] [TFPerf] 500 frames avg=10.0/0.5/5.2/4.5 max=29.3/2.7/22.4 ms (frame/update/draw/idle, 100 fps) | z=31 pl=12 pr=18 reanim=93 emit=27 part=131 | 3d=1
+[1791302436] [TFPerf] 500 frames avg=10.0/0.4/4.9/4.8 max=24.9/2.8/20.3 ms (frame/update/draw/idle, 100 fps) | z=25 pl=11 pr=14 reanim=75 emit=24 part=191 | 3d=1
+[1791302441] [TFPerf] 500 frames avg=10.0/0.2/4.5/5.3 max=28.3/7.2/17.2 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302446] [TFPerf] 500 frames avg=10.0/0.1/5.4/5.0 max=36.4/0.8/28.9 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302451] [TFPerf] 500 frames avg=10.0/0.1/6.3/4.6 max=30.0/0.8/23.9 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302456] [TFPerf] 500 frames avg=10.0/0.1/5.5/4.9 max=25.4/0.9/20.3 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+after 7 flags: [1791302527] flag=8 wave=48 numWaves=48 stage=7
+---- [C 7旗满场 40s] TFPerf lines ----
+[1791302344] [TFPerf] 500 frames avg=9.8/0.2/1.9/8.2 max=40.1/6.8/15.7 ms (frame/update/draw/idle, 102 fps) | z=0 pl=0 pr=0 reanim=1 emit=8 part=0 | 3d=1
+[1791302349] [TFPerf] 500 frames avg=10.0/0.1/0.3/9.8 max=38.8/1.4/0.7 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=1 emit=0 part=0 | 3d=1
+[1791302354] [TFPerf] 500 frames avg=10.0/0.2/0.3/9.6 max=25.6/3.6/0.6 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=2 emit=0 part=0 | 3d=1
+[1791302359] [TFPerf] 500 frames avg=10.0/0.2/0.3/9.6 max=19.1/1.5/0.8 ms (frame/update/draw/idle, 100 fps) | z=0 pl=0 pr=0 reanim=3 emit=0 part=0 | 3d=1
+[1791302364] [TFPerf] 500 frames avg=10.0/0.2/1.6/8.4 max=27.1/2.5/20.9 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=8 emit=0 part=0 | 3d=1
+[1791302369] [TFPerf] 500 frames avg=10.0/0.2/2.3/7.6 max=29.8/3.6/21.4 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302374] [TFPerf] 500 frames avg=10.0/0.1/4.0/7.2 max=41.9/2.4/28.4 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302379] [TFPerf] 500 frames avg=10.0/0.1/4.5/5.6 max=25.3/1.0/22.1 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=42 emit=0 part=0 | 3d=1
+[1791302384] [TFPerf] 500 frames avg=10.0/0.1/1.9/8.0 max=12.4/6.9/6.4 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=9 emit=0 part=0 | 3d=1
+[1791302388] [TFPerf] SLOW frame=45.4ms update=0.1 draw=45.3 | z=31 pl=0 pr=0 reanim=41 emit=0 part=0
+[1791302389] [TFPerf] 500 frames avg=10.0/0.1/3.1/8.1 max=50.2/1.2/45.3 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302392] [TFPerf] SLOW frame=40.7ms update=0.0 draw=40.6 | z=31 pl=0 pr=0 reanim=41 emit=0 part=0
+[1791302393] [TFPerf] SLOW frame=43.5ms update=0.2 draw=43.2 | z=31 pl=0 pr=0 reanim=41 emit=0 part=0
+[1791302394] [TFPerf] 500 frames avg=10.0/0.1/5.4/6.5 max=50.8/0.8/43.2 ms (frame/update/draw/idle, 100 fps) | z=31 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302401] [TFPerf] 500 frames avg=10.0/0.1/3.5/11.6 max=37.1/2.5/34.0 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=8 emit=0 part=0 | 3d=1
+[1791302406] [TFPerf] 500 frames avg=10.0/0.1/3.1/9.0 max=52.6/2.4/26.2 ms (frame/update/draw/idle, 100 fps) | z=30 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302411] [TFPerf] 500 frames avg=10.0/0.2/3.5/6.3 max=13.1/1.8/8.6 ms (frame/update/draw/idle, 100 fps) | z=30 pl=0 pr=0 reanim=41 emit=0 part=0 | 3d=1
+[1791302416] [TFPerf] 500 frames avg=10.0/0.2/2.4/7.4 max=29.3/6.9/21.8 ms (frame/update/draw/idle, 100 fps) | z=5 pl=0 pr=0 reanim=10 emit=0 part=0 | 3d=1
+[1791302421] [TFPerf] 500 frames avg=10.0/0.3/2.1/7.6 max=18.1/8.5/13.1 ms (frame/update/draw/idle, 100 fps) | z=35 pl=18 pr=12 reanim=114 emit=10 part=67 | 3d=1
+[1791302426] [TFPerf] 500 frames avg=10.0/0.6/4.9/4.6 max=22.6/2.5/17.6 ms (frame/update/draw/idle, 100 fps) | z=36 pl=17 pr=18 reanim=112 emit=36 part=169 | 3d=1
+[1791302431] [TFPerf] 500 frames avg=10.0/0.5/5.2/4.5 max=29.3/2.7/22.4 ms (frame/update/draw/idle, 100 fps) | z=31 pl=12 pr=18 reanim=93 emit=27 part=131 | 3d=1
+[1791302436] [TFPerf] 500 frames avg=10.0/0.4/4.9/4.8 max=24.9/2.8/20.3 ms (frame/update/draw/idle, 100 fps) | z=25 pl=11 pr=14 reanim=75 emit=24 part=191 | 3d=1
+[1791302441] [TFPerf] 500 frames avg=10.0/0.2/4.5/5.3 max=28.3/7.2/17.2 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302446] [TFPerf] 500 frames avg=10.0/0.1/5.4/5.0 max=36.4/0.8/28.9 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302451] [TFPerf] 500 frames avg=10.0/0.1/6.3/4.6 max=30.0/0.8/23.9 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302456] [TFPerf] 500 frames avg=10.0/0.1/5.5/4.9 max=25.4/0.9/20.3 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302461] [TFPerf] 500 frames avg=10.0/0.1/5.4/4.6 max=29.5/0.7/24.1 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302466] [TFPerf] 500 frames avg=10.0/0.2/5.6/4.6 max=38.1/3.0/26.9 ms (frame/update/draw/idle, 100 fps) | z=48 pl=11 pr=11 reanim=103 emit=12 part=48 | 3d=1
+[1791302471] [TFPerf] 500 frames avg=10.0/0.3/5.0/4.8 max=20.3/7.7/15.2 ms (frame/update/draw/idle, 100 fps) | z=20 pl=11 pr=13 reanim=68 emit=33 part=163 | 3d=1
+[1791302476] [TFPerf] 500 frames avg=10.0/0.5/4.8/4.8 max=24.1/2.0/22.3 ms (frame/update/draw/idle, 100 fps) | z=65 pl=17 pr=10 reanim=149 emit=37 part=208 | 3d=1
+[1791302481] [TFPerf] 501 frames avg=10.0/0.1/6.8/3.8 max=33.3/1.4/29.1 ms (frame/update/draw/idle, 100 fps) | z=65 pl=17 pr=10 reanim=149 emit=26 part=107 | 3d=1
+[1791302486] [TFPerf] 500 frames avg=10.0/0.1/6.6/4.1 max=41.3/1.0/32.1 ms (frame/update/draw/idle, 100 fps) | z=65 pl=17 pr=10 reanim=150 emit=26 part=107 | 3d=1
+[1791302491] [TFPerf] 500 frames avg=10.0/0.4/6.0/3.9 max=24.6/2.2/19.5 ms (frame/update/draw/idle, 100 fps) | z=35 pl=14 pr=10 reanim=101 emit=49 part=287 | 3d=1
+[1791302496] [TFPerf] 503 frames avg=10.0/0.4/7.0/3.0 max=41.9/2.1/37.5 ms (frame/update/draw/idle, 100 fps) | z=95 pl=18 pr=19 reanim=169 emit=5 part=33 | 3d=1
+[1791302496] [TFPerf] SLOW frame=53.8ms update=0.0 draw=53.7 | z=95 pl=18 pr=19 reanim=169 emit=5 part=33
+[1791302498] [TFPerf] SLOW frame=41.7ms update=0.0 draw=41.6 | z=95 pl=18 pr=19 reanim=169 emit=5 part=33
+[1791302498] [TFPerf] SLOW frame=45.5ms update=0.0 draw=45.5 | z=95 pl=18 pr=19 reanim=169 emit=5 part=33
+[1791302501] [TFPerf] 500 frames avg=10.0/0.1/7.9/2.9 max=56.2/1.6/53.7 ms (frame/update/draw/idle, 100 fps) | z=95 pl=18 pr=19 reanim=169 emit=5 part=33 | 3d=1
+[1791302502] [TFPerf] SLOW frame=59.2ms update=0.1 draw=59.1 | z=95 pl=18 pr=19 reanim=169 emit=5 part=33
+[1791302502] [TFPerf] SLOW frame=66.5ms update=0.0 draw=66.5 | z=95 pl=18 pr=19 reanim=169 emit=5 part=33
+[1791302506] [TFPerf] 501 frames avg=10.0/0.2/8.0/3.2 max=72.9/7.6/66.5 ms (frame/update/draw/idle, 100 fps) | z=68 pl=18 pr=13 reanim=137 emit=31 part=160 | 3d=1
+[1791302510] [TFPerf] SLOW frame=42.4ms update=2.3 draw=40.0 | z=111 pl=19 pr=15 reanim=194 emit=37 part=204
+[1791302510] [TFPerf] SLOW frame=43.8ms update=1.3 draw=42.5 | z=111 pl=19 pr=14 reanim=194 emit=34 part=228
+[1791302510] [TFPerf] SLOW frame=65.4ms update=1.7 draw=63.7 | z=111 pl=19 pr=11 reanim=197 emit=33 part=224
+[1791302511] [TFPerf] SLOW frame=91.7ms update=0.7 draw=90.9 | z=111 pl=19 pr=11 reanim=197 emit=47 part=322
+[1791302511] [TFPerf] SLOW frame=72.7ms update=0.9 draw=71.7 | z=111 pl=19 pr=8 reanim=197 emit=48 part=331
+[1791302511] [TFPerf] 506 frames avg=10.0/0.5/7.8/3.0 max=100.2/2.6/90.9 ms (frame/update/draw/idle, 100 fps) | z=111 pl=19 pr=11 reanim=198 emit=54 part=319 | 3d=1
+[1791302511] [TFPerf] SLOW frame=49.7ms update=0.7 draw=49.0 | z=110 pl=18 pr=31 reanim=188 emit=34 part=227
+[1791302511] [TFPerf] SLOW frame=44.6ms update=0.1 draw=44.6 | z=135 pl=18 pr=30 reanim=220 emit=30 part=227
+[1791302511] [TFPerf] SLOW frame=55.8ms update=0.1 draw=55.7 | z=135 pl=18 pr=30 reanim=220 emit=30 part=224
+[1791302511] [TFPerf] SLOW frame=78.0ms update=0.5 draw=77.5 | z=135 pl=18 pr=30 reanim=220 emit=24 part=159
+[1791302511] [TFPerf] SLOW frame=75.3ms update=0.2 draw=75.1 | z=135 pl=18 pr=30 reanim=220 emit=22 part=124
+[1791302512] [TFPerf] SLOW frame=73.0ms update=0.4 draw=72.6 | z=135 pl=18 pr=30 reanim=220 emit=22 part=123
+[1791302512] [TFPerf] SLOW frame=67.2ms update=0.3 draw=66.9 | z=135 pl=18 pr=30 reanim=220 emit=20 part=84
+[1791302512] [TFPerf] SLOW frame=52.0ms update=0.4 draw=51.6 | z=135 pl=18 pr=30 reanim=219 emit=20 part=82
+[1791302512] [TFPerf] SLOW frame=41.9ms update=0.1 draw=41.7 | z=135 pl=18 pr=30 reanim=219 emit=20 part=85
+[1791302513] [TFPerf] SLOW frame=72.7ms update=0.6 draw=72.1 | z=135 pl=18 pr=30 reanim=219 emit=13 part=80
+[1791302513] [TFPerf] SLOW frame=83.3ms update=0.2 draw=83.1 | z=135 pl=18 pr=30 reanim=219 emit=13 part=78
+[1791302513] [TFPerf] SLOW frame=63.1ms update=0.6 draw=62.6 | z=135 pl=18 pr=30 reanim=219 emit=13 part=80
+[1791302513] [TFPerf] SLOW frame=102.6ms update=0.0 draw=102.6 | z=135 pl=18 pr=30 reanim=219 emit=13 part=80
+[1791302513] [TFPerf] SLOW frame=90.4ms update=0.0 draw=90.4 | z=135 pl=18 pr=30 reanim=219 emit=13 part=80
+[1791302513] [TFPerf] SLOW frame=112.2ms update=0.2 draw=111.9 | z=135 pl=18 pr=30 reanim=219 emit=13 part=80
+[1791302513] [TFPerf] SLOW frame=160.2ms update=0.7 draw=159.5 | z=135 pl=18 pr=30 reanim=219 emit=13 part=82
+[1791302514] [TFPerf] SLOW frame=117.8ms update=0.0 draw=117.8 | z=135 pl=18 pr=30 reanim=219 emit=13 part=82
+[1791302514] [TFPerf] SLOW frame=47.7ms update=0.2 draw=47.5 | z=135 pl=18 pr=30 reanim=219 emit=13 part=83
+[1791302514] [TFPerf] SLOW frame=99.5ms update=0.0 draw=99.5 | z=135 pl=18 pr=30 reanim=219 emit=13 part=83
+[1791302514] [TFPerf] SLOW frame=87.2ms update=0.0 draw=87.1 | z=135 pl=18 pr=30 reanim=219 emit=13 part=82
+[1791302514] [TFPerf] SLOW frame=71.4ms update=0.0 draw=71.4 | z=135 pl=18 pr=30 reanim=219 emit=13 part=82
+[1791302514] [TFPerf] SLOW frame=91.5ms update=0.0 draw=91.5 | z=135 pl=18 pr=30 reanim=219 emit=13 part=78
+[1791302514] [TFPerf] SLOW frame=96.0ms update=0.0 draw=95.9 | z=135 pl=18 pr=30 reanim=219 emit=13 part=79
+[1791302514] [TFPerf] SLOW frame=99.5ms update=0.0 draw=99.5 | z=135 pl=18 pr=30 reanim=219 emit=13 part=79
+[1791302514] [TFPerf] SLOW frame=55.9ms update=0.0 draw=55.9 | z=135 pl=18 pr=30 reanim=219 emit=13 part=79
+[1791302515] [TFPerf] SLOW frame=127.7ms update=0.0 draw=127.6 | z=135 pl=18 pr=30 reanim=219 emit=13 part=80
+[1791302515] [TFPerf] SLOW frame=124.5ms update=0.1 draw=124.4 | z=135 pl=18 pr=30 reanim=219 emit=13 part=81
+[1791302516] [TFPerf] 503 frames avg=10.1/0.1/8.9/5.6 max=174.0/2.3/159.5 ms (frame/update/draw/idle, 99 fps) | z=135 pl=18 pr=30 reanim=219 emit=13 part=83 | 3d=1
+[1791302521] [TFPerf] 500 frames avg=11.2/0.1/9.8/6.6 max=152.6/1.7/143.4 ms (frame/update/draw/idle, 89 fps) | z=135 pl=18 pr=30 reanim=220 emit=13 part=81 | 3d=1
+[1791302526] [TFPerf] 500 frames avg=10.0/0.3/8.2/3.5 max=92.3/2.5/81.3 ms (frame/update/draw/idle, 100 fps) | z=104 pl=9 pr=31 reanim=156 emit=14 part=88 | 3d=1
+---- [C 7旗满场 40s] TFPerf lines ----
+[1791302531] [TFPerf] 504 frames avg=10.0/0.2/8.3/6.3 max=124.0/3.2/117.9 ms (frame/update/draw/idle, 100 fps) | z=146 pl=18 pr=49 reanim=238 emit=30 part=214 | 3d=1
+[1791302536] [TFPerf] 501 frames avg=10.0/0.2/8.4/3.9 max=82.7/2.1/76.7 ms (frame/update/draw/idle, 100 fps) | z=143 pl=7 pr=58 reanim=216 emit=13 part=160 | 3d=1
+[1791302541] [TFPerf] 500 frames avg=10.0/0.4/8.1/2.7 max=43.9/2.9/41.0 ms (frame/update/draw/idle, 100 fps) | z=55 pl=5 pr=20 reanim=160 emit=92 part=271 | 3d=1
+[1791302546] [TFPerf] 500 frames avg=10.0/0.4/5.2/4.6 max=26.8/7.1/23.7 ms (frame/update/draw/idle, 100 fps) | z=32 pl=4 pr=9 reanim=81 emit=15 part=79 | 3d=1
+[1791302551] [TFPerf] 500 frames avg=10.0/0.2/5.7/4.4 max=23.4/2.2/17.5 ms (frame/update/draw/idle, 100 fps) | z=32 pl=4 pr=9 reanim=81 emit=14 part=76 | 3d=1
+[1791302556] [TFPerf] 502 frames avg=10.0/0.2/5.0/5.4 max=40.5/1.4/30.0 ms (frame/update/draw/idle, 100 fps) | z=32 pl=4 pr=9 reanim=81 emit=14 part=74 | 3d=1
+[1791302561] [TFPerf] 501 frames avg=10.0/0.1/6.7/6.2 max=50.0/2.6/40.3 ms (frame/update/draw/idle, 100 fps) | z=32 pl=4 pr=9 reanim=81 emit=14 part=74 | 3d=1
+[1791302566] [TFPerf] 500 frames avg=10.0/0.3/5.6/4.3 max=16.5/2.0/11.5 ms (frame/update/draw/idle, 100 fps) | z=32 pl=4 pr=9 reanim=81 emit=14 part=74 | 3d=1
+alive=True
+done 00:02:49

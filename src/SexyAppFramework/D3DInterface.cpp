@@ -20,6 +20,23 @@ static int gMaxTextureAspectRatio;
 static DWORD gSupportedPixelFormats;
 static bool gTextureSizeMustBePow2;
 static const int MAX_TEXTURE_SIZE = 1024;
+
+// 【性能】精灵批次：定义在文件下方
+// （TextureData::Blt 之前），这里先声明，供上方的 UpdateViewport / SetLinearFilter 等提前用到。
+static void FlushSpriteBatch(LPDIRECT3DDEVICE7 theDevice);
+
+// 【性能】精灵绘制统计：本帧追加的四边形数 / 实际提交的绘制调用次数。
+// 合批关闭时两者相等（一个精灵一次调用）；开启时调用数远小于四边形数。
+static unsigned int gSpriteQuadsThisFrame = 0;
+static unsigned int gSpriteCallsThisFrame = 0;
+
+void D3DInterfaceGetSpriteStats(unsigned int* theQuads, unsigned int* theCalls)
+{
+	if (theQuads != NULL) *theQuads = gSpriteQuadsThisFrame;
+	if (theCalls != NULL) *theCalls = gSpriteCallsThisFrame;
+	gSpriteQuadsThisFrame = 0;
+	gSpriteCallsThisFrame = 0;
+}
 static bool gLinearFilter = false;
 std::string D3DInterface::mErrorString;
 static const int gVertexType = D3DFVF_TLVERTEX;
@@ -207,6 +224,7 @@ HRESULT CALLBACK D3DInterface::PixelFormatsCallback(LPDDPIXELFORMAT theFormat, L
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::UpdateViewport()
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】视口变化前提交批次
 	HRESULT hr;
 	RECT aRect;
 	GetClientRect(mHWnd, &aRect);
@@ -1156,10 +1174,18 @@ LPDIRECTDRAWSURFACE7 TextureData::GetTextureF(float x, float y, float &width, fl
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
+// 【性能】混合模式的当前值（用于去重）与精灵批次的模式标识。
+static int gCurDrawModeSet = INT_MIN;
+static int gCurSpriteBatchModeKey = INT_MIN;
+
 static void SetLinearFilter(LPDIRECT3DDEVICE7 theDevice, bool linear)
 {
 	if (gLinearFilter != linear)
 	{
+		// 【性能·正确性】批次的顶点是 flush 时才提交的，会用到**提交时**的纹理状态；
+		// 所以滤镜一旦要变，必须先把攒着的批次提交掉，否则它们的采样方式会被改掉。
+		FlushSpriteBatch(theDevice);
+
 		D3DTEXTUREMAGFILTER aFilter = linear ? D3DTFG_LINEAR : D3DTFG_POINT;		
 
 		const char *aDebugContext = linear ? "SetTextureStageState LINEAR" : "SetTextureStageState Point";
@@ -1171,6 +1197,47 @@ static void SetLinearFilter(LPDIRECT3DDEVICE7 theDevice, bool linear)
 		gLinearFilter = linear;
 	}
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// 【性能】精灵批次：把连续、同纹理、同混合模式的四边形攒进一个三角列表，一次提交。
+//
+// 原实现（下方 TextureData::Blt 的内层循环）对**每个四边形**发一次
+//   SetTexture + DrawPrimitive(4 顶点, 即时模式)
+// 一帧上千个精灵就是上千次绘制调用 —— 实测「空场绘制 0.3ms、31 个僵尸涨到 4~5ms」，
+// 随精灵数线性增长；这就是原版渲染路径的主要瓶颈（DX8 时代即时模式 + 无批次）。
+//
+// 这里只做「合并提交」，每个四边形的位置/颜色/UV、以及四边形之间的先后顺序**一律不变**，
+// 因此画出来的像素与原实现逐像素一致。渲染顺序被任何其它绘制/状态打断时立即 flush，
+// 保证顺序语义不破。
+//
+// 把 TF_SPRITE_BATCH 设为 0 可一键退回原实现（排查用）。
+///////////////////////////////////////////////////////////////////////////////
+#define TF_SPRITE_BATCH 1
+
+#if TF_SPRITE_BATCH
+enum { TF_SPRITE_BATCH_MAX_QUADS = 256 };
+static LPDIRECTDRAWSURFACE7 gSpriteBatchTex = nullptr;
+static int                  gSpriteBatchCount = 0;        // 已攒顶点数（每四边形 6 个）
+static int                  gSpriteBatchModeKey = -1;     // 当前批次的混合模式标识
+static D3DTLVERTEX          gSpriteBatchVerts[TF_SPRITE_BATCH_MAX_QUADS * 6];
+
+static void FlushSpriteBatch(LPDIRECT3DDEVICE7 theDevice)
+{
+	if (gSpriteBatchCount == 0)
+		return;
+
+	D3DInterface::CheckDXError(theDevice->SetTexture(0, gSpriteBatchTex), "SetTexture sprite batch");
+	D3DInterface::CheckDXError(theDevice->DrawPrimitive(D3DPT_TRIANGLELIST, gVertexType,
+		gSpriteBatchVerts, gSpriteBatchCount, 0), "DrawPrimitive sprite batch");
+	gSpriteCallsThisFrame++;
+
+	gSpriteBatchCount = 0;
+	gSpriteBatchTex = nullptr;
+	gSpriteBatchModeKey = -1;
+}
+#else
+static void FlushSpriteBatch(LPDIRECT3DDEVICE7) { }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -1215,8 +1282,36 @@ void TextureData::Blt(LPDIRECT3DDEVICE7 theDevice, float theX, float theY, const
 			};
 
 			
+#if TF_SPRITE_BATCH
+			// 【性能】同纹理 + 同混合模式 → 追加进当前批次；否则先 flush 再开新批。
+			// 顶点改写为三角列表（每四边形 6 个顶点，两个三角形共用 v2 对角线），
+			// 位置/颜色/UV 与原 4 顶点三角带完全等价。
+			if (aTexture != gSpriteBatchTex || gSpriteBatchModeKey != gCurSpriteBatchModeKey)
+				FlushSpriteBatch(theDevice);
+
+			if (gSpriteBatchCount + 6 > TF_SPRITE_BATCH_MAX_QUADS * 6)
+				FlushSpriteBatch(theDevice);
+
+			gSpriteBatchTex = aTexture;
+			gSpriteBatchModeKey = gCurSpriteBatchModeKey;
+
+			{
+				D3DTLVERTEX* aOut = &gSpriteBatchVerts[gSpriteBatchCount];
+				aOut[0] = aVertex[0];
+				aOut[1] = aVertex[1];
+				aOut[2] = aVertex[2];
+				aOut[3] = aVertex[2];
+				aOut[4] = aVertex[1];
+				aOut[5] = aVertex[3];
+				gSpriteBatchCount += 6;
+				gSpriteQuadsThisFrame++;
+			}
+#else
 			D3DInterface::CheckDXError(theDevice->SetTexture(0, aTexture),"SetTexture gTexture");			
 			D3DInterface::CheckDXError(theDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, gVertexType, aVertex, 4, 0),"DrawPrimitive (Tri) 1");
+			gSpriteQuadsThisFrame++;
+			gSpriteCallsThisFrame++;
+#endif
 
 			srcX += aWidth;
 			dstX += aWidth;
@@ -1510,12 +1605,39 @@ void TextureData::BltTransformed(LPDIRECT3DDEVICE7 theDevice, const SexyMatrix3 
 				{ tp[3].x,				tp[3].y,			0,	1,	aColor,	0,	u2,		v2 }
 			};
 
-			D3DInterface::CheckDXError(theDevice->SetTexture(0, aTexture),"SetTexture gTexture");
-
+			// 【性能】未裁剪的四边形同样走批次；部分越界的仍走原 CPU 裁剪路径。
+			// 裁剪与否必须与批次隔离：先 flush，保证批次里的顶点不会被错误裁剪。
 			if (!clipped)
+			{
+#if TF_SPRITE_BATCH
+				if (aTexture != gSpriteBatchTex || gSpriteBatchModeKey != gCurSpriteBatchModeKey)
+					FlushSpriteBatch(theDevice);
+				if (gSpriteBatchCount + 6 > TF_SPRITE_BATCH_MAX_QUADS * 6)
+					FlushSpriteBatch(theDevice);
+				gSpriteBatchTex = aTexture;
+				gSpriteBatchModeKey = gCurSpriteBatchModeKey;
+				{
+					D3DTLVERTEX* aOut = &gSpriteBatchVerts[gSpriteBatchCount];
+					aOut[0] = aVertex[0];
+					aOut[1] = aVertex[1];
+					aOut[2] = aVertex[2];
+					aOut[3] = aVertex[2];
+					aOut[4] = aVertex[1];
+					aOut[5] = aVertex[3];
+					gSpriteBatchCount += 6;
+					gSpriteQuadsThisFrame++;
+				}
+#else
+				D3DInterface::CheckDXError(theDevice->SetTexture(0, aTexture),"SetTexture gTexture");
 				D3DInterface::CheckDXError(theDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, gVertexType, aVertex, 4, 0),"DrawPrimitive (Tri) 3");
+				gSpriteQuadsThisFrame++;
+				gSpriteCallsThisFrame++;
+#endif
+			}
 			else
 			{
+				FlushSpriteBatch(theDevice);      // 【性能】裁剪路径与批次互斥
+				D3DInterface::CheckDXError(theDevice->SetTexture(0, aTexture),"SetTexture gTexture");
 				VertexList aList;
 				aList.push_back(aVertex[0]);
 				aList.push_back(aVertex[1]);
@@ -1753,6 +1875,7 @@ bool D3DInterface::RecoverBits(MemoryImage* theImage)
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::SetCurTexture(MemoryImage *theImage)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (theImage==NULL)
 	{
 		mD3DDevice->SetTexture(0,NULL);
@@ -1770,6 +1893,7 @@ void D3DInterface::SetCurTexture(MemoryImage *theImage)
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::PushTransform(const SexyMatrix3 &theTransform, bool concatenate)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (mTransformStack.empty() || !concatenate)
 		mTransformStack.push_back(theTransform);
 	else
@@ -1783,6 +1907,7 @@ void D3DInterface::PushTransform(const SexyMatrix3 &theTransform, bool concatena
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::PopTransform()
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (!mTransformStack.empty())
 		mTransformStack.pop_back();
 }
@@ -1805,6 +1930,14 @@ void D3DInterface::RemoveMemoryImage(MemoryImage *theImage)
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::Cleanup()
 {
+	// 设备状态会被重建，缓存作废
+	gCurDrawModeSet = INT_MIN;
+	gCurSpriteBatchModeKey = INT_MIN;
+#if TF_SPRITE_BATCH
+	gSpriteBatchCount = 0;
+	gSpriteBatchTex = nullptr;
+#endif
+
 	Flush();
 
 	ImageSet::iterator anItr;
@@ -1846,6 +1979,15 @@ void D3DInterface::Cleanup()
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::SetupDrawMode(int theDrawMode, const Color &theColor, Image *theImage)
 {
+	// 【性能】混合模式没变就不重复下发（原来每个精灵无条件发两次 SetRenderState）。
+	// 同时，模式一旦变化必须先把攒着的批次提交掉 —— 否则它们会用到新的混合状态。
+	if (gCurDrawModeSet == theDrawMode)
+		return;
+
+	FlushSpriteBatch(mD3DDevice);
+	gCurDrawModeSet = theDrawMode;
+	gCurSpriteBatchModeKey = theDrawMode;
+
 	if (theDrawMode == Graphics::DRAWMODE_NORMAL)
 	{
 /*		if (theImage != NULL)
@@ -1904,6 +2046,7 @@ void D3DInterface::Blt(Image* theImage, float theX, float theY, const Rect& theS
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::BltMirror(Image* theImage, float theX, float theY, const Rect& theSrcRect, const Color& theColor, int theDrawMode, bool linearFilter)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	SexyTransform2D aTransform;		
 
 	aTransform.Translate(-theSrcRect.mWidth,0);
@@ -1917,6 +2060,7 @@ void D3DInterface::BltMirror(Image* theImage, float theX, float theY, const Rect
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::BltClipF(Image* theImage, float theX, float theY, const Rect& theSrcRect, const Rect *theClipRect, const Color& theColor, int theDrawMode)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	SexyTransform2D aTransform;
 	aTransform.Translate(theX, theY);
 
@@ -1927,6 +2071,7 @@ void D3DInterface::BltClipF(Image* theImage, float theX, float theY, const Rect&
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::StretchBlt(Image* theImage,  const Rect& theDestRect, const Rect& theSrcRect, const Rect* theClipRect, const Color &theColor, int theDrawMode, bool fastStretch, bool mirror)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	float xScale = (float)theDestRect.mWidth / theSrcRect.mWidth;
 	float yScale = (float)theDestRect.mHeight / theSrcRect.mHeight;
 
@@ -1947,6 +2092,7 @@ void D3DInterface::StretchBlt(Image* theImage,  const Rect& theDestRect, const R
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::BltRotated(Image* theImage, float theX, float theY, const Rect* theClipRect, const Color& theColor, int theDrawMode, double theRot, float theRotCenterX, float theRotCenterY, const Rect &theSrcRect)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	SexyTransform2D aTransform;
 
 	aTransform.Translate(-theRotCenterX, -theRotCenterY);
@@ -1960,6 +2106,7 @@ void D3DInterface::BltRotated(Image* theImage, float theX, float theY, const Rec
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::BltTransformed(Image* theImage, const Rect* theClipRect, const Color& theColor, int theDrawMode, const Rect &theSrcRect, const SexyMatrix3 &theTransform, bool linearFilter, float theX, float theY, bool center)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (!PreDraw())
 		return;
 
@@ -2003,6 +2150,7 @@ void D3DInterface::BltTransformed(Image* theImage, const Rect* theClipRect, cons
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::DrawLine(double theStartX, double theStartY, double theEndX, double theEndY, const Color& theColor, int theDrawMode)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (!PreDraw())
 		return;
 
@@ -2046,6 +2194,7 @@ void D3DInterface::DrawLine(double theStartX, double theStartY, double theEndX, 
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::FillRect(const Rect& theRect, const Color& theColor, int theDrawMode)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (!PreDraw())
 		return;
 
@@ -2089,6 +2238,7 @@ void D3DInterface::FillRect(const Rect& theRect, const Color& theColor, int theD
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::DrawTriangle(const TriVertex &p1, const TriVertex &p2, const TriVertex &p3, const Color &theColor, int theDrawMode)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (!PreDraw())
 		return;
 
@@ -2111,6 +2261,7 @@ void D3DInterface::DrawTriangle(const TriVertex &p1, const TriVertex &p2, const 
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::FillPoly(const Point theVertices[], int theNumVertices, const Rect *theClipRect, const Color &theColor, int theDrawMode, int tx, int ty)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (theNumVertices<3)
 		return;
 
@@ -2147,6 +2298,7 @@ void D3DInterface::FillPoly(const Point theVertices[], int theNumVertices, const
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::DrawTriangleTex(const TriVertex &p1, const TriVertex &p2, const TriVertex &p3, const Color &theColor, int theDrawMode, Image *theTexture, bool blend)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	TriVertex aVertices[1][3] = {{p1, p2, p3}};
 	DrawTrianglesTex(aVertices,1,theColor,theDrawMode,theTexture,blend);
 }
@@ -2155,6 +2307,7 @@ void D3DInterface::DrawTriangleTex(const TriVertex &p1, const TriVertex &p2, con
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::DrawTrianglesTex(const TriVertex theVertices[][3], int theNumTriangles, const Color &theColor, int theDrawMode, Image *theTexture, float tx, float ty, bool blend)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	if (!PreDraw())
 		return;
 
@@ -2177,6 +2330,7 @@ void D3DInterface::DrawTrianglesTex(const TriVertex theVertices[][3], int theNum
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::DrawTrianglesTexStrip(const TriVertex theVertices[], int theNumTriangles, const Color &theColor, int theDrawMode, Image *theTexture, float tx, float ty, bool blend)
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】换用其它绘制路径前，先提交精灵批次
 	TriVertex aList[100][3];
 	int aTriNum = 0;
 	while (aTriNum < theNumTriangles)
@@ -2197,6 +2351,8 @@ void D3DInterface::DrawTrianglesTexStrip(const TriVertex theVertices[], int theN
 ///////////////////////////////////////////////////////////////////////////////
 void D3DInterface::Flush()
 {
+	FlushSpriteBatch(mD3DDevice);   // 【性能】帧末必须提交残留批次
+
 	if (mSceneBegun)
 	{
 		mD3DDevice->EndScene();
