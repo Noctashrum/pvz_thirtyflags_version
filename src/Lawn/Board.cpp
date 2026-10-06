@@ -9693,6 +9693,86 @@ bool Board::IterateReanimations(Reanimation*& theReanimation)
 }
 
 //0x41CBF0
+// ----------------------------------------------------------------------------------------------------
+// 【性能】僵尸按行分桶（供投射物碰撞查询）
+//
+// 原实现：Projectile::FindCollisionTarget 对每个投射物遍历**整个僵尸池**，只做一次 mRow 过滤。
+// 245 投射物 × 49 僵尸 ≈ 1.2 万次/帧，且随两者乘积增长（后期更糟）。
+// 僵尸本来就是按行活动的，分桶后每行只剩约 1/行数，量级直接降一档。
+//
+// 语义完全不变：该函数取的是「最左侧重叠目标」，与遍历顺序无关；
+// BOSS 不分行（任何行都能打），单独存一份。
+// 桶在「僵尸池数量变化」或「跨帧」时惰性重建，保证与池一致。
+// ----------------------------------------------------------------------------------------------------
+static Zombie* gTFRowZombies[MAX_GRID_SIZE_Y][TF_ROW_BUCKET_MAX];
+static int     gTFRowZombieCount[MAX_GRID_SIZE_Y];
+static Zombie* gTFBossZombies[8];
+static int     gTFBossZombieCount = 0;
+static unsigned int gTFBucketBuiltSize = 0xFFFFFFFFu;
+static int          gTFBucketBuiltFrame = -1;
+
+static void TFBuildZombieRowBucket(Board* theBoard)
+{
+    memset(gTFRowZombieCount, 0, sizeof(gTFRowZombieCount));
+    gTFBossZombieCount = 0;
+
+    Zombie* aZombie = nullptr;
+    while (theBoard->IterateZombies(aZombie))
+    {
+        if (aZombie->mZombieType == ZombieType::ZOMBIE_BOSS)
+        {
+            if (gTFBossZombieCount < 8)
+                gTFBossZombies[gTFBossZombieCount++] = aZombie;
+            continue;
+        }
+
+        int aRow = aZombie->mRow;
+        if (aRow < 0 || aRow >= MAX_GRID_SIZE_Y)
+            continue;
+
+        if (gTFRowZombieCount[aRow] < TF_ROW_BUCKET_MAX)
+            gTFRowZombies[aRow][gTFRowZombieCount[aRow]++] = aZombie;
+    }
+
+    gTFBucketBuiltSize = theBoard->mZombies.mSize;
+    gTFBucketBuiltFrame = theBoard->mMainCounter;
+}
+
+int Board::GetRowZombieCount(int theRow)
+{
+    if (theRow < 0 || theRow >= MAX_GRID_SIZE_Y)
+        return 0;
+
+    if (gTFBucketBuiltFrame != mMainCounter || gTFBucketBuiltSize != mZombies.mSize)
+        TFBuildZombieRowBucket(this);
+
+    return gTFRowZombieCount[theRow];
+}
+
+Zombie* Board::GetRowZombie(int theRow, int theIndex)
+{
+    if (theRow < 0 || theRow >= MAX_GRID_SIZE_Y || theIndex < 0 || theIndex >= gTFRowZombieCount[theRow])
+        return nullptr;
+
+    return gTFRowZombies[theRow][theIndex];
+}
+
+int Board::GetBossZombieCount()
+{
+    if (gTFBucketBuiltFrame != mMainCounter || gTFBucketBuiltSize != mZombies.mSize)
+        TFBuildZombieRowBucket(this);
+
+    return gTFBossZombieCount;
+}
+
+Zombie* Board::GetBossZombieByIndex(int theIndex)
+{
+    if (theIndex < 0 || theIndex >= gTFBossZombieCount)
+        return nullptr;
+
+    return gTFBossZombies[theIndex];
+}
+
 void Board::KillAllPlantsInRadius(int theX, int theY, int theRadius)
 {
 	Plant* aPlant = nullptr;

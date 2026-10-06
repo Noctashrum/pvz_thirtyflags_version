@@ -1942,6 +1942,7 @@ void D3DInterfaceGetSpriteStats(unsigned int* theQuads, unsigned int* theCalls);
 
 static unsigned int gTFPerfSpriteQuads = 0;   // 【性能】本帧精灵四边形数
 static unsigned int gTFPerfSpriteCalls = 0;   // 【性能】本帧实际绘制调用次数
+static unsigned int gTFPerfSpriteClipped = 0;  // 【性能】其中走 CPU 剪剪的四边形数
 
 static double TFPerfMs(LARGE_INTEGER theFrom, LARGE_INTEGER theTo)
 {
@@ -2042,7 +2043,7 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
     {
         char aBuf[320];
         sprintf(aBuf,
-            "[TFPerf] %d frames avg=%.1f/%.1f/%.1f/%.1f max=%.1f/%.1f/%.1f ms (frame/update/draw/idle, %.0f fps) | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u | sprite=%u/%u 3d=%d",
+            "[TFPerf] %d frames avg=%.1f/%.1f/%.1f/%.1f max=%.1f/%.1f/%.1f ms (frame/update/draw/idle, %.0f fps) | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u | sprite=%u/%u clip=%u 3d=%d",
             gTFPerfFrames,
             gTFPerfSumFrame / (double)gTFPerfFrames, gTFPerfSumUpdate / (double)gTFPerfFrames,
             gTFPerfSumDraw / (double)gTFPerfFrames, gTFPerfSumIdle / (double)gTFPerfFrames,
@@ -2053,6 +2054,7 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
             theBoard->mApp->mEffectSystem->mParticleHolder->mEmitters.mSize,
             theBoard->mApp->mEffectSystem->mParticleHolder->mParticles.mSize,
             gTFPerfSpriteQuads, gTFPerfSpriteCalls,
+            gTFPerfSpriteClipped,
             theBoard->mApp->Is3DAccelerated() ? 1 : 0);
         TFLog(aBuf);
 

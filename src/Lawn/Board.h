@@ -47,6 +47,8 @@ constexpr int	MAX_RENDER_ITEMS			= 2048;
 constexpr int	PROGRESS_METER_COUNTER		= 150;
 
 constexpr int	WIDE_BOARD_WIDTH			= 800;
+// 【性能】每行僵尸分桶容量（超出则不予分桶，仅影响极端堆叠时的碰撞查找范围）
+constexpr int	TF_ROW_BUCKET_MAX			= 256;
 constexpr int	BOARD_OFFSET				= 220;
 constexpr int	BOARD_EDGE					= -100;
 constexpr int	BOARD_IMAGE_WIDTH_OFFSET	= 1180;
@@ -742,6 +744,12 @@ public:
 	void							CompleteEndLevelSequenceForSaving();
 	void							RemoveZombiesForRepick();
 	int								GetGraveStonesCount();
+	// 【性能】僵尸按行分桶查询（投射物碰撞用，语义与全池遍历一致）
+	int							GetRowZombieCount(int theRow);
+	Zombie*							GetRowZombie(int theRow, int theIndex);
+	int							GetBossZombieCount();
+	Zombie*							GetBossZombieByIndex(int theIndex);
+
 	bool							IsSurvivalStageWithRepick();
 	bool							IsLastStandStageWithRepick();
 	void							DoTypingCheck(Sexy::KeyCode theKey);

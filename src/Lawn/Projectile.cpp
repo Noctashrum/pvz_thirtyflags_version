@@ -208,9 +208,18 @@ Zombie* Projectile::FindCollisionTarget()
 	Zombie* aBestZombie = nullptr;
 	int aMinX = 0;
 
+	// 【性能】改为按行分桶遍历（原来每个投射物都要扫整个僵尸池）。
+	// 取「最左侧重叠目标」与遍历顺序无关，所以结果与原实现一致；BOSS 单独遍历。
 	Zombie* aZombie = nullptr;
-	while (mBoard->IterateZombies(aZombie))
+	for (int aBucketIndex = 0; ; aBucketIndex++)
 	{
+		if (aBucketIndex < mBoard->GetRowZombieCount(mRow))
+			aZombie = mBoard->GetRowZombie(mRow, aBucketIndex);
+		else if (aBucketIndex - mBoard->GetRowZombieCount(mRow) < mBoard->GetBossZombieCount())
+			aZombie = mBoard->GetBossZombieByIndex(aBucketIndex - mBoard->GetRowZombieCount(mRow));
+		else
+			break;
+
 		if ((aZombie->mZombieType == ZombieType::ZOMBIE_BOSS || aZombie->mRow == mRow) && aZombie->EffectedByDamage((unsigned int)mDamageRangeFlags))
 		{
 			if (aZombie->mZombiePhase == ZombiePhase::PHASE_SNORKEL_WALKING_IN_POOL && mPosZ >= 45.0f)

@@ -29,6 +29,14 @@ static void FlushSpriteBatch(LPDIRECT3DDEVICE7 theDevice);
 // 合批关闭时两者相等（一个精灵一次调用）；开启时调用数远小于四边形数。
 static unsigned int gSpriteQuadsThisFrame = 0;
 static unsigned int gSpriteCallsThisFrame = 0;
+static unsigned int gSpriteClippedQuadsThisFrame = 0;   // 【性能】走 CPU 剪剪路径的四边形形数
+
+unsigned int D3DInterfaceGetClippedQuadCount()
+{
+	unsigned int aN = gSpriteClippedQuadsThisFrame;
+	gSpriteClippedQuadsThisFrame = 0;
+	return aN;
+}
 
 void D3DInterfaceGetSpriteStats(unsigned int* theQuads, unsigned int* theCalls)
 {

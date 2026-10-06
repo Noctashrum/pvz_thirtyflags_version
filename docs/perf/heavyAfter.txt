@@ -1,0 +1,7 @@
+heavy tag=heavyAfter start 00:33:09
+flag1 : [1791304421] [TFPerf] 500 frames avg=10.0/0.0/3.6/6.4 max=14.5/0.1/8.5 ms (frame/update/draw/idle, 100 fps) | z=7 pl=4 pr=9 reanim=50 emit=21 part=162 | sprite=684/599 3d=1
+flag2 : [1791304421] [TFPerf] 500 frames avg=10.0/0.0/3.6/6.4 max=14.5/0.1/8.5 ms (frame/update/draw/idle, 100 fps) | z=7 pl=4 pr=9 reanim=50 emit=21 part=162 | sprite=684/599 3d=1
+flag3 : [1791304421] [TFPerf] 500 frames avg=10.0/0.0/3.6/6.4 max=14.5/0.1/8.5 ms (frame/update/draw/idle, 100 fps) | z=7 pl=4 pr=9 reanim=50 emit=21 part=162 | sprite=684/599 3d=1
+flag4 : [1791304421] [TFPerf] 500 frames avg=10.0/0.0/3.6/6.4 max=14.5/0.1/8.5 ms (frame/update/draw/idle, 100 fps) | z=7 pl=4 pr=9 reanim=50 emit=21 part=162 | sprite=684/599 3d=1
+flag5 : [1791304485] [TFPerf] 500 frames avg=10.0/0.0/3.5/8.2 max=26.2/0.6/5.7 ms (frame/update/draw/idle, 100 fps) | z=7 pl=4 pr=9 reanim=50 emit=21 part=162 | sprite=684/599 3d=1
+flag6 : [1791304495] [TFPerf] 500 frames avg=10.0/0.0/3.6/7.8 max=25.9/0.6/11.5 ms (frame/update/draw/idle, 100 fps) | z=7 pl=4 pr=9 reanim=50 emit=21 part=162 | sprite=684/599 3d=1
