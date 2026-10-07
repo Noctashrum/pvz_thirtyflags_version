@@ -1,0 +1,5 @@
+measure tag=atlas1 fill=25 nofill=False
+[14:01:58] launching
+[14:01:59] pid=41200
+[14:08:20] hwnd=330920
+[14:08:20] EXITED during load

@@ -31,6 +31,9 @@ struct TextureDataPiece
 {
 	LPDIRECTDRAWSURFACE7 mTexture;
 	int mWidth,mHeight;
+	// 【性能】纹理图集：本 piece 在共享图集页里的位置（-1 = 未入图集，用独立纹理）
+	int mAtlasPage;
+	int mAtlasX, mAtlasY;
 };
 
 ///////////////////////////////////////////////////////////////////////////////

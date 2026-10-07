@@ -36,9 +36,12 @@ static const int MAX_TEXTURE_SIZE = 1024;
 // 每个矩形额外分配 1px 间隙（gutter）：线性过滤采样时不会采到邻居的像素。
 // 失败时**整张图回退**到原来的「一 piece 一纹理」，保证任何情况都不会画错。
 // ----------------------------------------------------------------------------------------------------
-#define TF_TEXTURE_ATLAS 1   // 设 0 可一键回退到"一图一纹理"
+// 【状态】默认关闭：实机验证发现一开就在「加载界段」进程直接退出，
+// 原因待定位（疑似是 1024× 1024 图集页的表面创建/锁定失败，
+// 或 DDraw/D3D 错误走了 DisplayError → exit 路径）。
+// 先保证行为与之前完全一致，待定位完成再开。
+#define TF_TEXTURE_ATLAS 0   // 设 0 可一键回退到"一图一纹理"
 
-#if TF_TEXTURE_ATLAS
 enum { TF_ATLAS_PAGE_SIZE = MAX_TEXTURE_SIZE, TF_ATLAS_MAX_PAGES = 16, TF_ATLAS_GUTTER = 1 };
 
 struct TfAtlasPage
@@ -51,6 +54,7 @@ struct TfAtlasPage
 };
 
 static TfAtlasPage gTfAtlasPages[TF_ATLAS_MAX_PAGES];
+static int          gTfAtlasPageCount = 0;
 
 // 货架装箱的核心：把 w×h（已含间隙）放进这一页当前的货架，放得下就更新游标。
 // 拆成纯函数是为了能脱离 D3D 独立测试（见 tools/atlas_pack_test.cpp 的验证脚本）。
@@ -78,7 +82,6 @@ static bool TfAtlasTryPlace(TfAtlasPage& thePage, int theW, int theH, int& theOu
 
 	return true;
 }
-#endif
 
 
 // 【性能】精灵批次：定义在文件下方
@@ -531,6 +534,47 @@ static LPDIRECTDRAWSURFACE7 CreateTextureSurface(LPDIRECT3DDEVICE7 theDevice, LP
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
+#if TF_TEXTURE_ATLAS
+// 【性能】从共享图集里分配一块 w×h（含 gutter）。成功返回页号并输出页内左上角坐标；
+// 失败返回 -1（调用方回退到"一 piece 一纹理"）。
+static int TfAtlasAlloc(LPDIRECT3DDEVICE7 theDevice, LPDIRECTDRAW7 theDraw, int theFormat,
+	int theWidth, int theHeight, int& theOutX, int& theOutY)
+{
+	if (theFormat == (int)PixelFormat_Palette8)
+		return -1;                       // 调色板纹理不参与图集（一页只有一种格式）
+
+	int aW = theWidth + TF_ATLAS_GUTTER;
+	int aH = theHeight + TF_ATLAS_GUTTER;
+	if (aW > TF_ATLAS_PAGE_SIZE || aH > TF_ATLAS_PAGE_SIZE)
+		return -1;                       // 单块超过一页
+
+	for (int i = 0; i < gTfAtlasPageCount; i++)
+	{
+		if (gTfAtlasPages[i].mFormat != theFormat)
+			continue;
+		if (TfAtlasTryPlace(gTfAtlasPages[i], aW, aH, theOutX, theOutY))
+			return i;
+	}
+
+	if (gTfAtlasPageCount >= TF_ATLAS_MAX_PAGES)
+		return -1;
+
+	TfAtlasPage& aPage = gTfAtlasPages[gTfAtlasPageCount];
+	aPage.mSurface = CreateTextureSurface(theDevice, theDraw, TF_ATLAS_PAGE_SIZE, TF_ATLAS_PAGE_SIZE, (PixelFormat)theFormat);
+	if (aPage.mSurface == NULL)
+		return -1;
+	aPage.mFormat = theFormat;
+	aPage.mX = 0;
+	aPage.mY = 0;
+	aPage.mRowH = 0;
+
+	int aIndex = gTfAtlasPageCount++;
+	if (!TfAtlasTryPlace(gTfAtlasPages[aIndex], aW, aH, theOutX, theOutY))
+		return -1;                       // 刚建的页，理论上不会发生
+	return aIndex;
+}
+#endif
+
 static void CopyImageToTexture8888(void *theDest, DWORD theDestPitch, MemoryImage *theImage, int offx, int offy, int theWidth, int theHeight, bool rightPad)
 {
 
@@ -798,7 +842,9 @@ static void CopyTexturePalette8ToImage(void *theDest, DWORD theDestPitch, Memory
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-static void CopyImageToTexture(LPDIRECTDRAWSURFACE7 theTexture, MemoryImage *theImage, int offx, int offy, int texWidth, int texHeight, PixelFormat theFormat)
+// 【性能】图集版多两个参数：写入目标子矩形的左上角（非图集时传 0,0，行为与原来完全一致）。
+static void CopyImageToTexture(LPDIRECTDRAWSURFACE7 theTexture, MemoryImage *theImage, int offx, int offy, int texWidth, int texHeight, PixelFormat theFormat,
+	int destX = 0, int destY = 0)
 {
 	if (theTexture==NULL)
 		return;
@@ -813,6 +859,19 @@ static void CopyImageToTexture(LPDIRECTDRAWSURFACE7 theTexture, MemoryImage *the
 
 	bool rightPad = aWidth<texWidth;
 	bool bottomPad = aHeight<texHeight;
+
+	// 【性能】图集：把目的指针偏移到子矩形；此时不要启用 padding hack
+	// （padding 会写到 aWidth/aHeight 之外，在图集里会踩到邻居的格子）。
+	void* aDestSurface = aDesc.lpSurface;
+	if (destX != 0 || destY != 0)
+	{
+		int aBytesPerPixel = 4;
+		if (theFormat == PixelFormat_Palette8) aBytesPerPixel = 1;
+		else if (theFormat == PixelFormat_R5G6B5 || theFormat == PixelFormat_A4R4G4B4) aBytesPerPixel = 2;
+		aDestSurface = (void*)((uchar*)aDesc.lpSurface + aDesc.lPitch * destY + destX * aBytesPerPixel);
+		rightPad = false;
+		bottomPad = false;
+	}
 //	if(aWidth < texWidth || aHeight < texHeight)
 //		memset(aDesc.lpSurface, 0, aDesc.lPitch*aDesc.dwHeight);
 
@@ -820,15 +879,15 @@ static void CopyImageToTexture(LPDIRECTDRAWSURFACE7 theTexture, MemoryImage *the
 	{
 		switch (theFormat)
 		{
-			case PixelFormat_A8R8G8B8:	CopyImageToTexture8888(aDesc.lpSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
-			case PixelFormat_A4R4G4B4:	CopyImageToTexture4444(aDesc.lpSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
-			case PixelFormat_R5G6B5:	CopyImageToTexture565(aDesc.lpSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
-			case PixelFormat_Palette8:	CopyImageToTexturePalette8(aDesc.lpSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
+			case PixelFormat_A8R8G8B8:	CopyImageToTexture8888(aDestSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
+			case PixelFormat_A4R4G4B4:	CopyImageToTexture4444(aDestSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
+			case PixelFormat_R5G6B5:	CopyImageToTexture565(aDestSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
+			case PixelFormat_Palette8:	CopyImageToTexturePalette8(aDestSurface, aDesc.lPitch, theImage, offx, offy, aWidth, aHeight, rightPad); break;
 		}
 
 		if (bottomPad)
 		{
-			uchar *dstrow = ((uchar*)aDesc.lpSurface)+aDesc.lPitch*aHeight;
+			uchar *dstrow = ((uchar*)aDestSurface)+aDesc.lPitch*aHeight;
 			memcpy(dstrow,dstrow-aDesc.lPitch,aDesc.lPitch);
 		}
 	}
@@ -970,6 +1029,10 @@ void TextureData::ReleaseTextures()
 {
 	for(int i=0; i<(int)mTextures.size(); i++)
 	{
+		// 【性能】入图集的 piece 共用图集页表面，绝不能在这里 Release
+		if (mTextures[i].mAtlasPage >= 0)
+			continue;
+
 		LPDIRECTDRAWSURFACE7 aSurface = mTextures[i].mTexture;
 		if (aSurface!=NULL)
 			aSurface->Release();
@@ -1038,6 +1101,9 @@ void TextureData::CreateTextureDimensions(MemoryImage *theImage)
 		aPiece.mTexture = NULL;
 		aPiece.mWidth = mTexPieceWidth;
 		aPiece.mHeight = mTexPieceHeight;
+		aPiece.mAtlasPage = -1;      // 【性能】默认不入图集
+		aPiece.mAtlasX = 0;
+		aPiece.mAtlasY = 0;
 	}
 
 	// Assign right pieces
@@ -1139,6 +1205,13 @@ void TextureData::CreateTextures(MemoryImage *theImage, LPDIRECT3DDEVICE7 theDev
 	else if (aFormat==PixelFormat_A4R4G4B4)
 		aFormatSize = 2;
 
+	// 【性能】优先把整张图放进共享图集：所有 piece 都成功才用图集（失败整图回退），
+	// 保证不会出现"一半在图集、一半在独立纹理"导致 UV 语义不一致。
+	bool aUseAtlas = false;
+#if TF_TEXTURE_ATLAS
+	aUseAtlas = (aFormat != PixelFormat_Palette8);
+#endif
+
 	i=0;
 	for(y=0; y<aHeight; y+=mTexPieceHeight)
 	{
@@ -1147,22 +1220,67 @@ void TextureData::CreateTextures(MemoryImage *theImage, LPDIRECT3DDEVICE7 theDev
 			TextureDataPiece &aPiece = mTextures[i];
 			if (createTextures)
 			{
-				aPiece.mTexture = CreateTextureSurface(theDevice, theDraw, aPiece.mWidth, aPiece.mHeight, aFormat);
-				if (aPiece.mTexture==NULL) // create texture failure
+#if TF_TEXTURE_ATLAS
+				if (aUseAtlas)
 				{
-					mPixelFormat = PixelFormat_Unknown;
-					return;
+					int aAtlasX = 0, aAtlasY = 0;
+					int aPage = TfAtlasAlloc(theDevice, theDraw, (int)aFormat, aPiece.mWidth, aPiece.mHeight, aAtlasX, aAtlasY);
+					if (aPage >= 0)
+					{
+						aPiece.mTexture = gTfAtlasPages[aPage].mSurface;
+						aPiece.mAtlasPage = aPage;
+						aPiece.mAtlasX = aAtlasX;
+						aPiece.mAtlasY = aAtlasY;
+						mTexMemSize += aPiece.mWidth*aPiece.mHeight*aFormatSize;
+					}
+					else
+					{
+						aUseAtlas = false;      // 这一张图整体回退（已分配的空间视为浪费，量很小）
+					}
 				}
+#endif
+				if (aPiece.mAtlasPage < 0)
+				{
+					aPiece.mTexture = CreateTextureSurface(theDevice, theDraw, aPiece.mWidth, aPiece.mHeight, aFormat);
+					if (aPiece.mTexture==NULL) // create texture failure
+					{
+						mPixelFormat = PixelFormat_Unknown;
+						return;
+					}
 
-				if (mPalette!=NULL)
-					aPiece.mTexture->SetPalette(mPalette);
-					
-				mTexMemSize += aPiece.mWidth*aPiece.mHeight*aFormatSize;
+					if (mPalette!=NULL)
+						aPiece.mTexture->SetPalette(mPalette);
+
+					mTexMemSize += aPiece.mWidth*aPiece.mHeight*aFormatSize;
+				}
 			}
 
-			CopyImageToTexture(aPiece.mTexture,theImage,x,y,aPiece.mWidth,aPiece.mHeight,aFormat);
+			if (aPiece.mAtlasPage >= 0)
+				CopyImageToTexture(aPiece.mTexture, theImage, x, y, aPiece.mWidth, aPiece.mHeight, aFormat, aPiece.mAtlasX, aPiece.mAtlasY);
+			else
+				CopyImageToTexture(aPiece.mTexture,theImage,x,y,aPiece.mWidth,aPiece.mHeight,aFormat);
 		}
 	}
+
+#if TF_TEXTURE_ATLAS
+	// 入图集后，GetTexture 直接返回"页内绝对 UV"，故缩放取 1（单 piece 图原本就是 1）
+	if (aUseAtlas)
+	{
+		for (int aPieceIndex = 0; aPieceIndex < (int)mTextures.size(); aPieceIndex++)
+		{
+			if (mTextures[aPieceIndex].mAtlasPage < 0)
+			{
+				aUseAtlas = false;
+				break;
+			}
+		}
+	}
+	if (aUseAtlas)
+	{
+		mMaxTotalU = 1.0f;
+		mMaxTotalV = 1.0f;
+	}
+#endif
 
 	mWidth = theImage->mWidth;
 	mHeight = theImage->mHeight;
@@ -1201,6 +1319,16 @@ LPDIRECTDRAWSURFACE7 TextureData::GetTexture(int x, int y, int &width, int &heig
 	width = right-left;
 	height = bottom-top;
 
+	if (aPiece.mAtlasPage >= 0)
+	{
+		// 【性能】图集：UV 以整页为分母，并加上本 piece 在页内的偏移
+		u1 = (float)(aPiece.mAtlasX + left) / TF_ATLAS_PAGE_SIZE;
+		v1 = (float)(aPiece.mAtlasY + top) / TF_ATLAS_PAGE_SIZE;
+		u2 = (float)(aPiece.mAtlasX + right) / TF_ATLAS_PAGE_SIZE;
+		v2 = (float)(aPiece.mAtlasY + bottom) / TF_ATLAS_PAGE_SIZE;
+		return aPiece.mTexture;
+	}
+
 	u1 = (float)left/aPiece.mWidth;
 	v1 = (float)top/aPiece.mHeight;
 	u2 = (float)right/aPiece.mWidth;
@@ -1231,6 +1359,16 @@ LPDIRECTDRAWSURFACE7 TextureData::GetTextureF(float x, float y, float &width, fl
 
 	width = right-left;
 	height = bottom-top;
+
+	if (aPiece.mAtlasPage >= 0)
+	{
+		// 【性能】图集：UV 以整页为分母，并加上本 piece 在页内的偏移
+		u1 = (float)(aPiece.mAtlasX + left) / TF_ATLAS_PAGE_SIZE;
+		v1 = (float)(aPiece.mAtlasY + top) / TF_ATLAS_PAGE_SIZE;
+		u2 = (float)(aPiece.mAtlasX + right) / TF_ATLAS_PAGE_SIZE;
+		v2 = (float)(aPiece.mAtlasY + bottom) / TF_ATLAS_PAGE_SIZE;
+		return aPiece.mTexture;
+	}
 
 	u1 = (float)left/aPiece.mWidth;
 	v1 = (float)top/aPiece.mHeight;

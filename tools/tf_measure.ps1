@@ -26,6 +26,21 @@ public class TFM {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint f);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+  public static string Shot(IntPtr h, string path) {
+    RECT r; GetClientRect(h, out r);
+    if (r.Right <= 0) return "NORECT";
+    var b = new System.Drawing.Bitmap(r.Right, r.Bottom);
+    var g = System.Drawing.Graphics.FromImage(b);
+    IntPtr dc = g.GetHdc();
+    PrintWindow(h, dc, 2);
+    g.ReleaseHdc(dc); g.Dispose();
+    b.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+    b.Dispose();
+    return "shot " + r.Right + "x" + r.Bottom;
+  }
   public static void Key(IntPtr h, char c) {
     PostMessage(h, 0x0100, (IntPtr)(int)c, (IntPtr)0x00140001);
     PostMessage(h, 0x0101, (IntPtr)(int)c, (IntPtr)0xC0140001);
@@ -43,7 +58,7 @@ public class TFM {
   }
 }
 '@
-if (-not ("TFM" -as [type])) { Add-Type -TypeDefinition $sig }
+if (-not ("TFM" -as [type])) { Add-Type -TypeDefinition $sig -ReferencedAssemblies System.Drawing }
 
 function GetTfCount { @(Get-Content $tflog -ErrorAction SilentlyContinue | Where-Object { $_ -match 'TFPerf' }).Count }
 
@@ -113,6 +128,7 @@ if (-not $NoFill) {
 }
 Start-Sleep -Seconds $FillSeconds
 
+L ("shot: " + [TFM]::Shot($h, "$out/$Tag.png"))
 $all = @(Get-Content $tflog | Where-Object { $_ -match 'TFPerf' })
 L "---- TFPerf (last 12) ----"
 $all | Select-Object -Last 12 | Add-Content $rep
