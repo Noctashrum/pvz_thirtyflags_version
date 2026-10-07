@@ -1032,10 +1032,194 @@ void ThirtyFlagsSetupBoard(Board* theBoard)
     }
 }
 
+// ----------------------------------------------------------------------------------------------------
+// ¡¾±íÏÖ²ã¡¿ÌØĞ§²ã£¨¼ÓÉ«ËÄ±ßĞÎ³Ø£©
+//
+// ÎªÊ²Ã´Òªµ¥¶À³É²ã£¨¶ø²»ÊÇ"Ã¿¸öÌØĞ§Ò»¸ö¹Ç÷À¶¯»­"£©£º
+//   ¡ì12 µÄ½áÂÛÊÇ"ºÏÅúµÄºìÀûÒª¿¿Í¬ÎÆÀí + Í¬»ìºÏÄ£Ê½ + Ë³ĞòÎŞ¹Ø"¡£¶øÌØĞ§Ç¡ºÃÈıÕß¶¼Âú×ã£º
+//     * Ö»ÓÃÁ½ÕÅ**ÏÖ³É**ÌùÍ¼£ºIMAGE_SPOTLIGHT£¨Èí¹âÔÎ£©/ IMAGE_WHITEPIXEL£¨ÊµĞÄËÄ±ßĞÎ£©¡ª¡ª ÁãĞÂ×ÊÔ´£»
+//     * È«²ãÖ»ÓÃ¼ÓÉ«»ìºÏ£¨DRAWMODE_ADDITIVE£©£¬ÖĞ¼ä²»»»Ä£Ê½£»
+//     * ÌØĞ§Ö®¼äÊÇ¼ÓÉ«µş¼Ó£¬**ÎŞÕÚ¸ÇÓïÒå** ¡ú »æÖÆË³Ğò²»Ó°Ïì»­Ãæ ¡ú ÔÊĞí°´ÀàĞÍ³É×é¡£
+//   ÓÚÊÇ "°´ÀàĞÍ·Ö×é»æÖÆ" ¾ÍµÈÓÚ "Ã¿ÀàËùÓĞÌØĞ§ºÏ²¢³É¼«ÉÙÊı´Î»æÖÆµ÷ÓÃ"¡£
+//
+// ³ØÂúÊ±¸²¸ÇÊÙÃü×î¶ÌµÄÒ»¸ö£¨¶ø²»ÊÇ¶ªÆú£©£¬±£Ö¤"ĞÂÊÂ¼şÒ»¶¨¿´µÃ¼û"¡£
+// ----------------------------------------------------------------------------------------------------
+// ¡¾ĞÔÄÜ¡¿ÌØĞ§²ãµÄÁ½¸öÓ²ÉÏÏŞ£º
+//   ³ØÈİÑÏÖÆ²¢·¢ÊıÁ¿£»ÒÔ¼°"Ã¿Ö¡³ÌÌî³äÔ¤Ëã"¡ª¡ª¼Ó·¨»ìºÏÊÇÖğÏñËØ¶ÁĞ´£¬
+//   Ãæ»ıÊÇºÜ¹óµÄ×ÊÔ´£¬²»ÄÜÈÎÆäÎŞÏŞÔö³¤¡£
+enum { TF_FX_MAX = 192 };
+// ¡¾¿ª¹Ø¡¿ÌØĞ§²ã×Ü¿ª¹Ø£ºÄ¬ÈÏ 0¡£
+// °´ §15 µÄ¹æ¾Ø£ºÎ´Íê³É¡¸²İÆºÂú³¡¡¹¸´ºËµÄäÈÈ¾¸Ä¶¯²»ÄÜÄ¬ÈÏ¿ª×Å¡£
+// ¿ªÆôÇ°ÇëÏÈ·´¸´¡°ÏÈ´´¼ò²âÒ»¸ö²İÆºÂú³¡µÄÖ¡¡±£¬²¢¶ÔÕÕ draw ·åÖµ¡£
+#define TF_FX_ENABLE 0
+
+enum { TF_FX_FILL_BUDGET = 60000 };   // Ã¿Ö¡ÌØĞ§ÏñËØ×ÜÃæ»ıÔ¤Ëã£¨ÏñËØ²£Ò»°ëÆÁ£©
+static int gTfFxFillUsed = 0;         // ±¾Ö¡ÒÑÓÃÃæ»ı
+enum { TF_FX_GLOW = 0, TF_FX_FLASH = 1, TF_FX_TRAIL = 2, TF_FX_KIND_COUNT = 3 };
+
+struct TfFxQuad
+{
+    float   mX, mY;          // ÖĞĞÄ
+    float   mSize;           // ±ß³¤
+    float   mGrow;           // Ã¿Ö¡ÅòÕÍ
+    int     mLife, mLifeMax;
+    int     mKind;
+    int     mAlpha;
+    int     mR, mG, mB;
+};
+
+static TfFxQuad gTfFx[TF_FX_MAX];
+static int      gTfFxCount = 0;
+
+// ÔªËØÅäÉ«£ºÓë»ğ¾æÊ÷×®×ª»»»ğÇòÊ±µÄ¼ÓÉ«È¾É«±£³ÖÒ»ÖÂ£¬Íæ¼ÒÒ»ÑÛÄÜ¶ÔÉÏ
+static void TfFxGetElementColor(int theElement, int& theR, int& theG, int& theB)
+{
+    theR = 255; theG = 220; theB = 140;
+    if (theElement == TF_ELEM_ICE)            { theR = 40;  theG = 90;  theB = 255; }
+    else if (theElement == TF_ELEM_DEEPFREEZE) { theR = 0;   theG = 40;  theB = 220; }
+    else if (theElement == TF_ELEM_POISON)     { theR = 40;  theG = 220; theB = 40;  }
+    else if (theElement == TF_ELEM_CHARM)      { theR = 255; theG = 60;  theB = 180; }
+    else if (theElement == TF_ELEM_BUTTER)     { theR = 255; theG = 210; theB = 30;  }
+    else if (theElement == TF_ELEM_GIANT)      { theR = 255; theG = 120; theB = 0;   }
+}
+
+// ÊÇ·ñ´øÈÎÒâ¾«Ó¢´ÊÌõ£¨ÓÃÓÚ¾«Ó¢ÍşÑ¹±íÏÖ£©
+static bool TfFxIsElite(Zombie* theZombie)
+{
+    for (int aKind = 0; aKind < TF_ELITE_KIND_COUNT; aKind++)
+    {
+        if (TFHasElite(theZombie, aKind))
+            return true;
+    }
+    return false;
+}
+
+static void TfFxSpawn(int theKind, float theX, float theY, float theSize, float theGrow,
+                      int theLife, int theAlpha, int theR, int theG, int theB)
+{
+    if (!ThirtyFlagsMode())
+        return;
+
+    int aSlot;
+    if (gTfFxCount < TF_FX_MAX)
+        aSlot = gTfFxCount++;
+    else
+    {
+        aSlot = 0;
+        for (int i = 1; i < TF_FX_MAX; i++)
+        {
+            if (gTfFx[i].mLife < gTfFx[aSlot].mLife)
+                aSlot = i;
+        }
+    }
+
+    TfFxQuad& aQuad = gTfFx[aSlot];
+    aQuad.mX = theX;
+    aQuad.mY = theY;
+    aQuad.mSize = (theSize < 4.0f) ? 4.0f : ((theSize > 72.0f) ? 72.0f : theSize);
+    aQuad.mGrow = (theGrow > 3.0f) ? 3.0f : theGrow;
+    aQuad.mLife = theLife;
+    aQuad.mLifeMax = theLife;
+    aQuad.mKind = theKind;
+    aQuad.mAlpha = theAlpha;
+    aQuad.mR = theR;
+    aQuad.mG = theG;
+    aQuad.mB = theB;
+}
+
+static void ThirtyFlagsFxUpdate()
+{
+    gTfFxFillUsed = 0;   // ¡¾ĞÔÄÜ¡¿Ã¿Ö¡ÖØÖÃÌî³ä¼ÆÊı
+#if !defined(TF_PLAYER_BUILD)
+	// ¡¾×Ô²â¡¿µ÷ÊÔ°æÃ¿¸ôÒ»¶ÎÊ±¼äÖ÷¶¯Éú³ÉÒ»×éÑùÆ¬£¬
+	// ÓÃÀ´ÑéÖ¤¡°ÌØĞ§²ã¡±±¾Éí£¨ÌùÍ¼/¼ÓÉ«/ºÏÅú£©ÊÇ·ñÕı³££¬ÓëÕ½¶·ÎŞ¹Ø¡£
+	static int aFxSelfTest = 0;
+	if (++aFxSelfTest % 90 == 0)
+	{
+		TfFxSpawn(TF_FX_GLOW, 300.0f + (float)(aFxSelfTest % 200), 300.0f + (float)((aFxSelfTest / 90) % 3) * 70.0f,
+			40.0f, 2.5f, 20, 150, 255, 220, 120);
+		TfFxSpawn(TF_FX_FLASH, 420.0f, 260.0f, 26.0f, 0.0f, 15, 90, 180, 220, 255);
+	}
+#endif
+    for (int i = 0; i < gTfFxCount; i++)
+    {
+        gTfFx[i].mLife--;
+        gTfFx[i].mSize += gTfFx[i].mGrow;
+    }
+
+    for (int i = 0; i < gTfFxCount; i++)
+    {
+        if (gTfFx[i].mLife <= 0 && i < gTfFxCount - 1)
+        {
+            gTfFx[i] = gTfFx[gTfFxCount - 1];
+            gTfFxCount--;
+            i--;
+        }
+    }
+    if (gTfFxCount > 0 && gTfFx[gTfFxCount - 1].mLife <= 0)
+        gTfFxCount--;
+}
+
+// °´ÀàĞÍ·Ö×é»­£ºÍ¬Ò»ÀàÓÃÍ¬Ò»ÕÅÌùÍ¼ + Í¬Ò»»ìºÏÄ£Ê½ ¡ú ÏàÁÚÌØĞ§Í¬ÎÆÀí£¬Ö±½Ó³Ôµ½ºÏÅú¡£
+static void ThirtyFlagsFxDraw(Sexy::Graphics* g)
+{
+    if (!TF_FX_ENABLE)   // ¡¾¿ª¹Ø¡¿Ä¬ÈÏ¹Ø±Õ£¬¼û TF_FX_ENABLE
+        return;
+    if (!ThirtyFlagsMode() || gTfFxCount == 0)
+        return;
+
+    for (int aKind = 0; aKind < TF_FX_KIND_COUNT; aKind++)
+    {
+        Sexy::Image* aImage = (aKind == TF_FX_FLASH) ? Sexy::IMAGE_WHITEPIXEL : Sexy::IMAGE_SPOTLIGHT;
+        if (aImage == NULL)
+            continue;
+
+        g->SetDrawMode(Sexy::Graphics::DRAWMODE_ADDITIVE);
+        g->SetColorizeImages(true);
+
+        for (int i = 0; i < gTfFxCount; i++)
+        {
+            TfFxQuad& aQuad = gTfFx[i];
+            if (aQuad.mKind != aKind)
+                continue;
+
+            float aFade = (float)aQuad.mLife / (float)(aQuad.mLifeMax > 0 ? aQuad.mLifeMax : 1);
+            if (aFade < 0.0f)
+                aFade = 0.0f;
+            if (aFade > 1.0f)
+                aFade = 1.0f;
+
+            int anAlpha = (int)(aQuad.mAlpha * aFade);
+            if (anAlpha <= 0)
+                continue;
+
+            int aSize = (int)aQuad.mSize;
+            if (aSize < 2)
+                continue;
+
+            // ¡¾ĞÔÄÜ¡¿Ã¿Ö¡Ìî³äÔ¤Ëã£º³¬³ö¾ÍÍ£»­£¬
+            // ±£Ö¤×î»µÖ¡¿ÉÔ¤²â£¨¡¾0ËµµÄ¾ÍÊÇÕâ¸ö½ÌÑµ£©¡£
+            if (gTfFxFillUsed + aSize * aSize > TF_FX_FILL_BUDGET)
+                break;
+            gTfFxFillUsed += aSize * aSize;
+
+            g->SetColor(Sexy::Color(aQuad.mR, aQuad.mG, aQuad.mB, anAlpha));
+            g->DrawImage(aImage, (int)(aQuad.mX - aSize * 0.5f), (int)(aQuad.mY - aSize * 0.5f), aSize, aSize);
+        }
+
+        g->SetDrawMode(Sexy::Graphics::DRAWMODE_NORMAL);
+        g->SetColorizeImages(false);
+    }
+}
+
 void ThirtyFlagsFlagChanged(Board* theBoard)
 {
     if (!theBoard)
         return;
+
+    // ¡¾±íÏÖ²ã¡¿»»ÆìË²¼äÈ«ÆÁÉÁÒ»ÏÂ£¨¼ÓÉ«°×¡¢µÍ alpha¡¢¶Ì´Ù£©
+    TfFxSpawn(TF_FX_FLASH, BOARD_WIDTH * 0.5f, BOARD_HEIGHT * 0.5f,
+        BOARD_WIDTH * 1.4f, 0.0f, 16, 60, 255, 240, 210);
 
     ThirtyFlagsSetupBoard(theBoard);
 
@@ -1316,6 +1500,13 @@ int ThirtyFlagsZombieTakeDamage(Zombie* theZombie, int theDamage, unsigned int t
     if (theZombie->mZombieType == ZOMBIE_BOSS)
         return theDamage;
 
+    // ¡¾±íÏÖ²ã¡¿ÃüÖĞ¹âÔÎ£ºÖ»¶Ô"´òµÃ¶¯"µÄÉËº¦·Å£¬ÇÒÔ¼ 1/3 ¸ÅÂÊ£¬±ÜÃâÌØĞ§³Ø±»Ë¢ÆÁ
+    if (theDamage > 0 && (RandRangeInt(0, 2) == 0))
+    {
+        TfFxSpawn(TF_FX_GLOW, theZombie->mPosX + 20.0f, theZombie->mPosY - 30.0f,
+            34.0f, 0.35f, 12, 90, 255, 240, 170);
+    }
+
     int aDamage = theDamage;
 
     if (TestBit(theDamageFlags, (int)TF_DAMAGE_FROM_PLANT))
@@ -1362,6 +1553,12 @@ void ThirtyFlagsZombieKilled(Zombie* theZombie)
 
     if (theZombie->mDead)
         return;
+
+    // ¡¾±íÏÖ²ã¡¿»÷É±³å»÷²¨£ºÏÈÀ´Ò»È¦´ó¶øÂıµÄ°×¹â£¬ÔÙµşÒ»²ãÅ¯É«ÓàêÍ
+    TfFxSpawn(TF_FX_GLOW, theZombie->mPosX + 20.0f, theZombie->mPosY - 35.0f,
+        40.0f, 3.2f, 16, 120, 255, 235, 200);
+    TfFxSpawn(TF_FX_GLOW, theZombie->mPosX + 20.0f, theZombie->mPosY - 35.0f,
+        20.0f, 1.6f, 24, 70, 255, 170, 90);
 
     // ¡¾ÈıÊ®Æì¡¿Õû±¸ÆÚ¼ä£¨»»ÆìÇå³¡£©µÄËÀÍö²»¼Æ»÷É±£º·ñÔò²ĞÓà½©Ê¬µÄ DieNoLoot
     // »á¹à±¬Á¬É±Êı¡¢¸ÅÂÊµôÑô¹â£¨ÓÃ»§·´À¡¡°»»ÆìÄªÃû¶à³öºÜ¶àÁ¬É±¡±£©
@@ -1503,6 +1700,18 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
     // ½á¹ûÈÎºÎµÍ DPS Ö²Îï£¨ÓÇÓô¹½/Ã¨Î²²İ 40 DPS£©¶¼ÍêÈ«´ò²»¶¯¾«Ó¢¡£
     // ÏÖ°´Éè¼Æ¸åĞŞÕıÎªÃ¿Ãë 2%¡£
     // ¡¾ÈıÊ®Æì¡¤Æ½ºâ¡¿¸¯»¯ÆÚ¼ä½ûÖ¹»Ø¸´£¨ÕâÊÇ¡¸´ò²»¶¯¾«Ó¢¡¹µÄ»úÖÆ½â£©
+    // ¡¾±íÏÖ²ã¡¿¾«Ó¢ÍşÑ¹£º½ÅÏÂ³£×¤Ò»È¦ÀäÉ«¹â»·£¬Ã¿¸ôÒ»»á¶ùÏòÍâÀ©Ò»È¦Âö³å
+    if ((theZombie->mZombieAge % 30) == 0 && TfFxIsElite(theZombie))
+    {
+        TfFxSpawn(TF_FX_GLOW, theZombie->mPosX + 20.0f, theZombie->mPosY + 12.0f,
+            46.0f, 2.2f, 22, 70, 190, 120, 255);
+    }
+    if ((theZombie->mZombieAge % 7) == 0 && TfFxIsElite(theZombie))
+    {
+        TfFxSpawn(TF_FX_GLOW, theZombie->mPosX + 20.0f, theZombie->mPosY + 14.0f,
+            30.0f, 0.0f, 8, 45, 150, 90, 255);
+    }
+
     if (TFHasElite(theZombie, ELITE_REGEN) &&
         ThirtyFlagsGetCorrupt(theZombie, theZombie->mBoard) == 0 &&
         (theZombie->mZombieAge % 100) == 0)
@@ -2074,6 +2283,9 @@ void ThirtyFlagsUpdateVisuals()
     if (!ThirtyFlagsMode())
         return;
 
+    // ¡¾±íÏÖ²ã¡¿ÌØĞ§³ØÍÆ½ø
+    ThirtyFlagsFxUpdate();
+
     // ¡¾ĞÔÄÜ¡¿ËüÔÚ Board::Update ×î¿ªÍ·±»µ÷ÓÃ£¬ÕıºÃµ±×÷¡¸±¾Ö¡¸üĞÂ¿ªÊ¼¡¹µÄÊ±¼ä´Á
     ThirtyFlagsPerfUpdateBegin();
 
@@ -2183,6 +2395,9 @@ void ThirtyFlagsUpdateVisuals()
 
 void ThirtyFlagsDrawVisuals(Sexy::Graphics* g)
 {
+    // ¡¾±íÏÖ²ã¡¿ÌØĞ§²ã£¨¼ÓÉ«£¬¶ÀÁ¢³É×é£©
+    ThirtyFlagsFxDraw(g);
+
     if (!ThirtyFlagsMode() || !g)
         return;
 
@@ -3566,6 +3781,23 @@ void ThirtyFlagsBoardUpdate(Board* theBoard)
     ThirtyFlagsTickCorrupt(); // ¡¾ÈıÊ®Æì¡¤Æ½ºâ¡¿¸¯»¯¼ÆÊ±Æ÷
     if (!ThirtyFlagsMode() || !theBoard)
         return;
+
+    // ¡¾±íÏÖ²ã¡¿ÔªËØµ¯ÍÏÎ²£º´øÔªËØµÄÖ±Éäµ¯Ã¿ 3 Ö¡ÁôÒ»Ã¶¼ÓÉ«¹âµã£¨°´ÔªËØÅäÉ«£©¡£
+    // ÓÃ mMainCounter ÏŞÁ÷£¬±ÜÃâÃ¿Ö¡Ã¿µ¯¶¼Éú³É£»Í¬Í¼Í¬Ä£Ê½£¬×îÖÕ»á±»ºÏÅú¡£
+    if ((theBoard->mMainCounter % 3) == 0)
+    {
+        Projectile* aProj = nullptr;
+        while (theBoard->IterateProjectiles(aProj))
+        {
+            if (aProj->mDead || aProj->mElement == 0)
+                continue;
+
+            int aR, aG, aB;
+            TfFxGetElementColor(aProj->mElement, aR, aG, aB);
+            TfFxSpawn(TF_FX_TRAIL, aProj->mPosX + 12.0f, aProj->mPosY + 10.0f,
+                14.0f, -0.35f, 10, 110, aR, aG, aB);
+        }
+    }
 
     // ¡¾ÈıÊ®Æì¡¿¹Ø¿¨½áÊøÅĞ¶¨ĞŞÕı£¨²ß»®°¸µÚ 2 ÕÂ£©£º
     // ²¨´Î±íÒ»´Î½¨Âú 180 ²¨£¬µ«¡°Ò»ÃæÆì¡±Ö»ÓĞ 6 ²¨¡£°Ñ mNumWaves Ğ£ÕıÎª**±¾ÆìÄ©²¨**£¬
