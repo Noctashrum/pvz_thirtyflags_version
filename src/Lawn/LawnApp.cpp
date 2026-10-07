@@ -1003,6 +1003,11 @@ bool LawnApp::TryLoadGame()
 	std::string aSaveName = GetSavedGameName(mGameMode, mPlayerInfo->mId);
 	mMusic->StopAllMusic();
 
+	// 【诊断】把“读档路径 + 是否存在”写进日志，
+	// 用来定位存档到底在哪个目录（以及证实“有存档”）。
+	TfLogWrite("TryLoadGame mode=%d dataFolder=[%s] path=[%s] exists=%d", (int)mGameMode,
+		GetAppDataFolder().c_str(), aSaveName.c_str(), this->FileExists(aSaveName) ? 1 : 0);
+
 	if (this->FileExists(aSaveName))
 	{
 		MakeNewBoard();
