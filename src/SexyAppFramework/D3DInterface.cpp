@@ -40,7 +40,7 @@ static const int MAX_TEXTURE_SIZE = 1024;
 // 原因待定位（疑似是 1024× 1024 图集页的表面创建/锁定失败，
 // 或 DDraw/D3D 错误走了 DisplayError → exit 路径）。
 // 先保证行为与之前完全一致，待定位完成再开。
-#define TF_TEXTURE_ATLAS 1   // 设 0 可一键回退到"一图一纹理"
+#define TF_TEXTURE_ATLAS 0   // 设 0 可一键回退到"一图一纹理"
 
 enum { TF_ATLAS_PAGE_MAX = MAX_TEXTURE_SIZE, TF_ATLAS_MAX_PAGES = 16, TF_ATLAS_GUTTER = 1 };
 

@@ -1,0 +1,16 @@
+measure tag=offverify fill=5 nofill=False
+[15:15:44] launching
+[15:15:45] pid=34572
+[15:15:48] hwnd=6426082
+[15:16:49] loaded=False
+[15:17:22] try1 entered=True tfLines=5
+[15:17:24] filled
+[15:17:29] shot: shot 800x600
+[15:17:29] ---- TFPerf (last 12) ----
+[1791357422] [TFPerf] 500 frames avg=9.9/0.2/3.4/8.2 max=67.5/3.8/28.4 ms (frame/update/draw/idle, 101 fps) | z=26 pl=0 pr=0 reanim=33 emit=0 part=0 | sprite=312/214 clip=0 3d=1
+[1791357427] [TFPerf] 500 frames avg=10.0/0.1/3.2/6.9 max=32.5/1.7/22.2 ms (frame/update/draw/idle, 100 fps) | z=26 pl=0 pr=0 reanim=35 emit=0 part=0 | sprite=258/232 clip=0 3d=1
+[1791357432] [TFPerf] 500 frames avg=10.0/0.1/0.4/9.7 max=37.0/6.8/6.0 ms (frame/update/draw/idle, 100 fps) | z=1 pl=0 pr=0 reanim=2 emit=0 part=0 | sprite=172/122 clip=0 3d=1
+[1791357437] [TFPerf] 500 frames avg=10.0/0.1/0.3/9.6 max=12.2/0.8/0.6 ms (frame/update/draw/idle, 100 fps) | z=1 pl=0 pr=0 reanim=3 emit=0 part=0 | sprite=157/111 clip=0 3d=1
+[1791357442] [TFPerf] 500 frames avg=10.0/0.1/0.3/9.6 max=12.0/3.5/0.6 ms (frame/update/draw/idle, 100 fps) | z=1 pl=0 pr=0 reanim=4 emit=0 part=0 | sprite=157/111 clip=0 3d=1
+[1791357447] [TFPerf] 500 frames avg=10.0/0.3/4.2/5.5 max=15.2/7.3/10.6 ms (frame/update/draw/idle, 100 fps) | z=44 pl=7 pr=4 reanim=78 emit=26 part=179 | sprite=296/180 clip=0 3d=1
+[15:17:29] total tf lines=6 done
