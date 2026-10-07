@@ -111,8 +111,9 @@ for ($try = 1; $try -le 5; $try++) {
   # 若弹窗抢了焦点，补按 1 / S；再点一次「继续游戏?」弹窗的按钮（该弹窗不处理键盘）
   [TFM]::Key($h, [char]0x31); Start-Sleep -Milliseconds 800
   [TFM]::Key($h, [char]0x53); Start-Sleep -Seconds 3
+  # 「继续游戏?」弹窗：点【新游戏】（客户端坐标 ≈ 557,480）确保进新局
+  [TFM]::Click($h, 557, 480); Start-Sleep -Seconds 4
   [TFM]::Click($h, 395, 480); Start-Sleep -Seconds 3
-  [TFM]::Click($h, 350, 560); Start-Sleep -Seconds 3
 
   for ($w = 0; $w -lt 8; $w++) {
     if ((GetTfCount) -gt 0) { $entered = $true; break }

@@ -1,0 +1,20 @@
+measure tag=fx5 fill=20 nofill=False
+[14:58:59] launching
+[14:59:00] pid=3332
+[14:59:02] hwnd=200336
+[15:00:04] loaded=False
+[15:00:36] try1 entered=True tfLines=5
+[15:00:39] filled
+[15:00:59] shot: shot 800x600
+[15:00:59] ---- TFPerf (last 12) ----
+[1791356411] [TFPerf] SLOW frame=295.0ms update=0.4 draw=294.6 | z=31 pl=3 pr=1 reanim=50 emit=16 part=148
+[1791356416] [TFPerf] 500 frames avg=10.3/0.0/5.1/7.1 max=363.7/0.4/294.6 ms (frame/update/draw/idle, 97 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=976/831 clip=0 3d=1
+[1791356421] [TFPerf] 500 frames avg=10.0/0.0/5.8/4.9 max=32.8/0.6/27.7 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=979/833 clip=0 3d=1
+[1791356426] [TFPerf] 500 frames avg=10.0/0.0/6.1/5.7 max=38.7/0.1/35.1 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=976/831 clip=0 3d=1
+[1791356431] [TFPerf] 500 frames avg=10.0/0.0/6.0/7.7 max=172.9/0.0/15.8 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=976/831 clip=0 3d=1
+[1791356436] [TFPerf] 500 frames avg=10.0/0.0/6.1/4.5 max=20.4/0.1/15.9 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=976/831 clip=0 3d=1
+[1791356441] [TFPerf] 501 frames avg=10.0/0.0/5.9/4.6 max=20.3/0.2/15.9 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=976/831 clip=0 3d=1
+[1791356446] [TFPerf] 500 frames avg=10.0/0.0/5.9/6.5 max=44.6/0.7/34.7 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=976/831 clip=0 3d=1
+[1791356451] [TFPerf] 502 frames avg=10.0/0.0/5.9/5.4 max=38.5/0.4/28.5 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=976/831 clip=0 3d=1
+[1791356456] [TFPerf] 502 frames avg=10.0/0.0/6.2/5.5 max=43.2/0.6/29.2 ms (frame/update/draw/idle, 100 fps) | z=31 pl=3 pr=1 reanim=50 emit=16 part=148 | sprite=979/833 clip=0 3d=1
+[15:00:59] total tf lines=10 done
