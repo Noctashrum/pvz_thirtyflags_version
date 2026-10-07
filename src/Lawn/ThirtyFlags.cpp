@@ -1032,10 +1032,175 @@ void ThirtyFlagsSetupBoard(Board* theBoard)
     }
 }
 
+// ----------------------------------------------------------------------------------------------------
+// 【表现层】特效层（加色四边形池）
+//
+// 为什么要单独成层（而不是"每个特效一个骨骼动画"）：
+//   §12 的结论是"合批的红利要靠同纹理 + 同混合模式 + 顺序无关"。而特效恰好三者都满足：
+//     * 只用两张**现成**贴图：IMAGE_SPOTLIGHT（软光晕）/ IMAGE_WHITEPIXEL（实心四边形）—— 零新资源；
+//     * 全层只用加色混合（DRAWMODE_ADDITIVE），中间不换模式；
+//     * 特效之间是加色叠加，**无遮盖语义** → 绘制顺序不影响画面 → 允许按类型成组。
+//   于是 "按类型分组绘制" 就等于 "每类所有特效合并成极少数次绘制调用"。
+//
+// 池满时覆盖寿命最短的一个（而不是丢弃），保证"新事件一定看得见"。
+// ----------------------------------------------------------------------------------------------------
+enum { TF_FX_MAX = 384 };
+enum { TF_FX_GLOW = 0, TF_FX_FLASH = 1, TF_FX_TRAIL = 2, TF_FX_KIND_COUNT = 3 };
+
+struct TfFxQuad
+{
+    float   mX, mY;          // 中心
+    float   mSize;           // 边长
+    float   mGrow;           // 每帧膨胀
+    int     mLife, mLifeMax;
+    int     mKind;
+    int     mAlpha;
+    int     mR, mG, mB;
+};
+
+static TfFxQuad gTfFx[TF_FX_MAX];
+static int      gTfFxCount = 0;
+
+// 元素配色：与火炬树桩转换火球时的加色染色保持一致，玩家一眼能对上
+static void TfFxGetElementColor(int theElement, int& theR, int& theG, int& theB)
+{
+    theR = 255; theG = 220; theB = 140;
+    if (theElement == TF_ELEM_ICE)            { theR = 40;  theG = 90;  theB = 255; }
+    else if (theElement == TF_ELEM_DEEPFREEZE) { theR = 0;   theG = 40;  theB = 220; }
+    else if (theElement == TF_ELEM_POISON)     { theR = 40;  theG = 220; theB = 40;  }
+    else if (theElement == TF_ELEM_CHARM)      { theR = 255; theG = 60;  theB = 180; }
+    else if (theElement == TF_ELEM_BUTTER)     { theR = 255; theG = 210; theB = 30;  }
+    else if (theElement == TF_ELEM_GIANT)      { theR = 255; theG = 120; theB = 0;   }
+}
+
+// 是否带任意精英词条（用于精英威压表现）
+static bool TfFxIsElite(Zombie* theZombie)
+{
+    for (int aKind = 0; aKind < TF_ELITE_KIND_COUNT; aKind++)
+    {
+        if (TFHasElite(theZombie, aKind))
+            return true;
+    }
+    return false;
+}
+
+static void TfFxSpawn(int theKind, float theX, float theY, float theSize, float theGrow,
+                      int theLife, int theAlpha, int theR, int theG, int theB)
+{
+    if (!ThirtyFlagsMode())
+        return;
+
+    int aSlot;
+    if (gTfFxCount < TF_FX_MAX)
+        aSlot = gTfFxCount++;
+    else
+    {
+        aSlot = 0;
+        for (int i = 1; i < TF_FX_MAX; i++)
+        {
+            if (gTfFx[i].mLife < gTfFx[aSlot].mLife)
+                aSlot = i;
+        }
+    }
+
+    TfFxQuad& aQuad = gTfFx[aSlot];
+    aQuad.mX = theX;
+    aQuad.mY = theY;
+    aQuad.mSize = theSize;
+    aQuad.mGrow = theGrow;
+    aQuad.mLife = theLife;
+    aQuad.mLifeMax = theLife;
+    aQuad.mKind = theKind;
+    aQuad.mAlpha = theAlpha;
+    aQuad.mR = theR;
+    aQuad.mG = theG;
+    aQuad.mB = theB;
+}
+
+static void ThirtyFlagsFxUpdate()
+{
+#if !defined(TF_PLAYER_BUILD)
+	// 【自测】调试版每隔一段时间主动生成一组样片，
+	// 用来验证“特效层”本身（贴图/加色/合批）是否正常，与战斗无关。
+	static int aFxSelfTest = 0;
+	if (++aFxSelfTest % 90 == 0)
+	{
+		TfFxSpawn(TF_FX_GLOW, 300.0f + (float)(aFxSelfTest % 200), 300.0f + (float)((aFxSelfTest / 90) % 3) * 70.0f,
+			40.0f, 2.5f, 20, 150, 255, 220, 120);
+		TfFxSpawn(TF_FX_FLASH, 420.0f, 260.0f, 26.0f, 0.0f, 15, 90, 180, 220, 255);
+	}
+#endif
+    for (int i = 0; i < gTfFxCount; i++)
+    {
+        gTfFx[i].mLife--;
+        gTfFx[i].mSize += gTfFx[i].mGrow;
+    }
+
+    for (int i = 0; i < gTfFxCount; i++)
+    {
+        if (gTfFx[i].mLife <= 0 && i < gTfFxCount - 1)
+        {
+            gTfFx[i] = gTfFx[gTfFxCount - 1];
+            gTfFxCount--;
+            i--;
+        }
+    }
+    if (gTfFxCount > 0 && gTfFx[gTfFxCount - 1].mLife <= 0)
+        gTfFxCount--;
+}
+
+// 按类型分组画：同一类用同一张贴图 + 同一混合模式 → 相邻特效同纹理，直接吃到合批。
+static void ThirtyFlagsFxDraw(Sexy::Graphics* g)
+{
+    if (!ThirtyFlagsMode() || gTfFxCount == 0)
+        return;
+
+    for (int aKind = 0; aKind < TF_FX_KIND_COUNT; aKind++)
+    {
+        Sexy::Image* aImage = (aKind == TF_FX_FLASH) ? Sexy::IMAGE_WHITEPIXEL : Sexy::IMAGE_SPOTLIGHT;
+        if (aImage == NULL)
+            continue;
+
+        g->SetDrawMode(Sexy::Graphics::DRAWMODE_ADDITIVE);
+        g->SetColorizeImages(true);
+
+        for (int i = 0; i < gTfFxCount; i++)
+        {
+            TfFxQuad& aQuad = gTfFx[i];
+            if (aQuad.mKind != aKind)
+                continue;
+
+            float aFade = (float)aQuad.mLife / (float)(aQuad.mLifeMax > 0 ? aQuad.mLifeMax : 1);
+            if (aFade < 0.0f)
+                aFade = 0.0f;
+            if (aFade > 1.0f)
+                aFade = 1.0f;
+
+            int anAlpha = (int)(aQuad.mAlpha * aFade);
+            if (anAlpha <= 0)
+                continue;
+
+            int aSize = (int)aQuad.mSize;
+            if (aSize < 2)
+                continue;
+
+            g->SetColor(Sexy::Color(aQuad.mR, aQuad.mG, aQuad.mB, anAlpha));
+            g->DrawImage(aImage, (int)(aQuad.mX - aSize * 0.5f), (int)(aQuad.mY - aSize * 0.5f), aSize, aSize);
+        }
+
+        g->SetDrawMode(Sexy::Graphics::DRAWMODE_NORMAL);
+        g->SetColorizeImages(false);
+    }
+}
+
 void ThirtyFlagsFlagChanged(Board* theBoard)
 {
     if (!theBoard)
         return;
+
+    // 【表现层】换旗瞬间全屏闪一下（加色白、低 alpha、短促）
+    TfFxSpawn(TF_FX_FLASH, BOARD_WIDTH * 0.5f, BOARD_HEIGHT * 0.5f,
+        BOARD_WIDTH * 1.4f, 0.0f, 16, 60, 255, 240, 210);
 
     ThirtyFlagsSetupBoard(theBoard);
 
@@ -1308,144 +1473,6 @@ void ThirtyFlagsZombieInit(Zombie* theZombie)
     }
 }
 
-// ----------------------------------------------------------------------------------------------------
-// 【表现层】特效层（加色四边形池）
-//
-// 为什么要单独成层（而不是"每个特效一个骨骼动画"）：
-//   §12 的结论是"合批的红利要靠同纹理 + 同混合模式 + 顺序无关"。而特效恰好三者都满足：
-//     * 只用两张**现成**贴图：IMAGE_SPOTLIGHT（软光晕）/ IMAGE_WHITEPIXEL（实心四边形）—— 零新资源；
-//     * 全层只用加色混合（DRAWMODE_ADDITIVE），中间不换模式；
-//     * 特效之间是加色叠加，**无遮盖语义** → 绘制顺序不影响画面 → 允许按类型成组。
-//   于是 "按类型分组绘制" 就等于 "每类所有特效合并成极少数次绘制调用"。
-//
-// 池满时覆盖寿命最短的一个（而不是丢弃），保证"新事件一定看得见"。
-// ----------------------------------------------------------------------------------------------------
-enum { TF_FX_MAX = 384 };
-enum { TF_FX_GLOW = 0, TF_FX_FLASH = 1, TF_FX_TRAIL = 2, TF_FX_KIND_COUNT = 3 };
-
-struct TfFxQuad
-{
-    float   mX, mY;          // 中心
-    float   mSize;           // 边长
-    float   mGrow;           // 每帧膨胀
-    int     mLife, mLifeMax;
-    int     mKind;
-    int     mAlpha;
-    int     mR, mG, mB;
-};
-
-static TfFxQuad gTfFx[TF_FX_MAX];
-static int      gTfFxCount = 0;
-
-static void TfFxSpawn(int theKind, float theX, float theY, float theSize, float theGrow,
-                      int theLife, int theAlpha, int theR, int theG, int theB)
-{
-    if (!ThirtyFlagsMode())
-        return;
-
-    int aSlot;
-    if (gTfFxCount < TF_FX_MAX)
-        aSlot = gTfFxCount++;
-    else
-    {
-        aSlot = 0;
-        for (int i = 1; i < TF_FX_MAX; i++)
-        {
-            if (gTfFx[i].mLife < gTfFx[aSlot].mLife)
-                aSlot = i;
-        }
-    }
-
-    TfFxQuad& aQuad = gTfFx[aSlot];
-    aQuad.mX = theX;
-    aQuad.mY = theY;
-    aQuad.mSize = theSize;
-    aQuad.mGrow = theGrow;
-    aQuad.mLife = theLife;
-    aQuad.mLifeMax = theLife;
-    aQuad.mKind = theKind;
-    aQuad.mAlpha = theAlpha;
-    aQuad.mR = theR;
-    aQuad.mG = theG;
-    aQuad.mB = theB;
-}
-
-static void ThirtyFlagsFxUpdate()
-{
-#if !defined(TF_PLAYER_BUILD)
-	// 【自测】调试版每隔一段时间主动生成一组样片，
-	// 用来验证“特效层”本身（贴图/加色/合批）是否正常，与战斗无关。
-	static int aFxSelfTest = 0;
-	if (++aFxSelfTest % 90 == 0)
-	{
-		TfFxSpawn(TF_FX_GLOW, 300.0f + (float)(aFxSelfTest % 200), 300.0f + (float)((aFxSelfTest / 90) % 3) * 70.0f,
-			40.0f, 2.5f, 20, 150, 255, 220, 120);
-		TfFxSpawn(TF_FX_FLASH, 420.0f, 260.0f, 26.0f, 0.0f, 15, 90, 180, 220, 255);
-	}
-#endif
-    for (int i = 0; i < gTfFxCount; i++)
-    {
-        gTfFx[i].mLife--;
-        gTfFx[i].mSize += gTfFx[i].mGrow;
-    }
-
-    for (int i = 0; i < gTfFxCount; i++)
-    {
-        if (gTfFx[i].mLife <= 0 && i < gTfFxCount - 1)
-        {
-            gTfFx[i] = gTfFx[gTfFxCount - 1];
-            gTfFxCount--;
-            i--;
-        }
-    }
-    if (gTfFxCount > 0 && gTfFx[gTfFxCount - 1].mLife <= 0)
-        gTfFxCount--;
-}
-
-// 按类型分组画：同一类用同一张贴图 + 同一混合模式 → 相邻特效同纹理，直接吃到合批。
-static void ThirtyFlagsFxDraw(Sexy::Graphics* g)
-{
-    if (!ThirtyFlagsMode() || gTfFxCount == 0)
-        return;
-
-    for (int aKind = 0; aKind < TF_FX_KIND_COUNT; aKind++)
-    {
-        Sexy::Image* aImage = (aKind == TF_FX_FLASH) ? Sexy::IMAGE_WHITEPIXEL : Sexy::IMAGE_SPOTLIGHT;
-        if (aImage == NULL)
-            continue;
-
-        g->SetDrawMode(Sexy::Graphics::DRAWMODE_ADDITIVE);
-        g->SetColorizeImages(true);
-
-        for (int i = 0; i < gTfFxCount; i++)
-        {
-            TfFxQuad& aQuad = gTfFx[i];
-            if (aQuad.mKind != aKind)
-                continue;
-
-            float aFade = (float)aQuad.mLife / (float)(aQuad.mLifeMax > 0 ? aQuad.mLifeMax : 1);
-            if (aFade < 0.0f)
-                aFade = 0.0f;
-            if (aFade > 1.0f)
-                aFade = 1.0f;
-
-            int anAlpha = (int)(aQuad.mAlpha * aFade);
-            if (anAlpha <= 0)
-                continue;
-
-            int aSize = (int)aQuad.mSize;
-            if (aSize < 2)
-                continue;
-
-            g->SetColor(Sexy::Color(aQuad.mR, aQuad.mG, aQuad.mB, anAlpha));
-            g->DrawImage(aImage, (int)(aQuad.mX - aSize * 0.5f), (int)(aQuad.mY - aSize * 0.5f), aSize, aSize);
-        }
-
-        g->SetDrawMode(Sexy::Graphics::DRAWMODE_NORMAL);
-        g->SetColorizeImages(false);
-    }
-}
-
 int ThirtyFlagsZombieTakeDamage(Zombie* theZombie, int theDamage, unsigned int theDamageFlags)
 {
     if (!ThirtyFlagsMode() || !theZombie)
@@ -1654,6 +1681,18 @@ void ThirtyFlagsZombieUpdate(Zombie* theZombie)
     // 结果任何低 DPS 植物（忧郁菇/猫尾草 40 DPS）都完全打不动精英。
     // 现按设计稿修正为每秒 2%。
     // 【三十旗·平衡】腐化期间禁止回复（这是「打不动精英」的机制解）
+    // 【表现层】精英威压：脚下常驻一圈冷色光环，每隔一会儿向外扩一圈脉冲
+    if ((theZombie->mZombieAge % 30) == 0 && TfFxIsElite(theZombie))
+    {
+        TfFxSpawn(TF_FX_GLOW, theZombie->mPosX + 20.0f, theZombie->mPosY + 12.0f,
+            46.0f, 2.2f, 22, 70, 190, 120, 255);
+    }
+    if ((theZombie->mZombieAge % 7) == 0 && TfFxIsElite(theZombie))
+    {
+        TfFxSpawn(TF_FX_GLOW, theZombie->mPosX + 20.0f, theZombie->mPosY + 14.0f,
+            30.0f, 0.0f, 8, 45, 150, 90, 255);
+    }
+
     if (TFHasElite(theZombie, ELITE_REGEN) &&
         ThirtyFlagsGetCorrupt(theZombie, theZombie->mBoard) == 0 &&
         (theZombie->mZombieAge % 100) == 0)
@@ -3723,6 +3762,23 @@ void ThirtyFlagsBoardUpdate(Board* theBoard)
     ThirtyFlagsTickCorrupt(); // 【三十旗·平衡】腐化计时器
     if (!ThirtyFlagsMode() || !theBoard)
         return;
+
+    // 【表现层】元素弹拖尾：带元素的直射弹每 3 帧留一枚加色光点（按元素配色）。
+    // 用 mMainCounter 限流，避免每帧每弹都生成；同图同模式，最终会被合批。
+    if ((theBoard->mMainCounter % 3) == 0)
+    {
+        Projectile* aProj = nullptr;
+        while (theBoard->IterateProjectiles(aProj))
+        {
+            if (aProj->mDead || aProj->mElement == 0)
+                continue;
+
+            int aR, aG, aB;
+            TfFxGetElementColor(aProj->mElement, aR, aG, aB);
+            TfFxSpawn(TF_FX_TRAIL, aProj->mPosX + 12.0f, aProj->mPosY + 10.0f,
+                14.0f, -0.35f, 10, 110, aR, aG, aB);
+        }
+    }
 
     // 【三十旗】关卡结束判定修正（策划案第 2 章）：
     // 波次表一次建满 180 波，但“一面旗”只有 6 波。把 mNumWaves 校正为**本旗末波**，
