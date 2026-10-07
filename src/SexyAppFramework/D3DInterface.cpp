@@ -21,6 +21,66 @@ static DWORD gSupportedPixelFormats;
 static bool gTextureSizeMustBePow2;
 static const int MAX_TEXTURE_SIZE = 1024;
 
+// ----------------------------------------------------------------------------------------------------
+// 【性能】纹理图集（sprite atlas）：运行时把「散图」打进共享大纹理，让相邻精灵同纹理从而可合批。
+//
+// 为什么需要：这套美术每张图各自一个纹理（TextureDataPiece 一个 piece 一个 surface），
+// 于是相邻精灵几乎不可能同纹理 —— 实测合批只能省 8~12%（976 个四边形 → 898 次绘制调用）。
+// 若把它们装进同一张图集，976 个四边形按 256/批只需约 4 次提交，绘制调用将下降约两个数量级。
+//
+// 装箱算法：**货架装箱（shelf / next-fit-decreasing 的在线版）**——
+// 每页维护一条「当前货架」的游标 (mX, mRowH)，能放下就放，放不下就换一行，行满则换页。
+// 复杂度 O(1)/次分配（只需比较游标），对"尺寸差异极大"的散图（PvZ 正是如此：
+// 从 8x8 的小图标到 400x600 的整只僵尸）比通用 MaxRects 便宜得多且足够。
+//
+// 每个矩形额外分配 1px 间隙（gutter）：线性过滤采样时不会采到邻居的像素。
+// 失败时**整张图回退**到原来的「一 piece 一纹理」，保证任何情况都不会画错。
+// ----------------------------------------------------------------------------------------------------
+#define TF_TEXTURE_ATLAS 1   // 设 0 可一键回退到"一图一纹理"
+
+#if TF_TEXTURE_ATLAS
+enum { TF_ATLAS_PAGE_SIZE = MAX_TEXTURE_SIZE, TF_ATLAS_MAX_PAGES = 16, TF_ATLAS_GUTTER = 1 };
+
+struct TfAtlasPage
+{
+	LPDIRECTDRAWSURFACE7	mSurface;
+	int						mFormat;        // PixelFormat（用 int 存，避免此处依赖枚举顺序）
+	int						mX;             // 当前货架已用到 x
+	int						mY;             // 当前货架顶部 y
+	int						mRowH;          // 当前货架高度
+};
+
+static TfAtlasPage gTfAtlasPages[TF_ATLAS_MAX_PAGES];
+
+// 货架装箱的核心：把 w×h（已含间隙）放进这一页当前的货架，放得下就更新游标。
+// 拆成纯函数是为了能脱离 D3D 独立测试（见 tools/atlas_pack_test.cpp 的验证脚本）。
+static bool TfAtlasTryPlace(TfAtlasPage& thePage, int theW, int theH, int& theOutX, int& theOutY)
+{
+	if (theW > TF_ATLAS_PAGE_SIZE || theH > TF_ATLAS_PAGE_SIZE)
+		return false;                                  // 单块就超过一页，放不下
+
+	if (thePage.mX + theW > TF_ATLAS_PAGE_SIZE)
+	{
+		// 当前货架放不下 → 换一行
+		thePage.mY += thePage.mRowH;
+		thePage.mX = 0;
+		thePage.mRowH = 0;
+	}
+
+	if (thePage.mY + theH > TF_ATLAS_PAGE_SIZE)
+		return false;                                  // 这一页也满了
+
+	theOutX = thePage.mX;
+	theOutY = thePage.mY;
+	thePage.mX += theW;
+	if (theH > thePage.mRowH)
+		thePage.mRowH = theH;
+
+	return true;
+}
+#endif
+
+
 // 【性能】精灵批次：定义在文件下方
 // （TextureData::Blt 之前），这里先声明，供上方的 UpdateViewport / SetLinearFilter 等提前用到。
 static void FlushSpriteBatch(LPDIRECT3DDEVICE7 theDevice);
