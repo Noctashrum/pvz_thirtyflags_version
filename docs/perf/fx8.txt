@@ -1,3 +1,0 @@
-measure tag=fx8 fill=12 nofill=False
-[15:23:24] launching
-[15:23:25] pid=20732
