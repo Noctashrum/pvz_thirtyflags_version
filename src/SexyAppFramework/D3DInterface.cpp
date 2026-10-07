@@ -40,9 +40,25 @@ static const int MAX_TEXTURE_SIZE = 1024;
 // 原因待定位（疑似是 1024× 1024 图集页的表面创建/锁定失败，
 // 或 DDraw/D3D 错误走了 DisplayError → exit 路径）。
 // 先保证行为与之前完全一致，待定位完成再开。
-#define TF_TEXTURE_ATLAS 0   // 设 0 可一键回退到"一图一纹理"
+#define TF_TEXTURE_ATLAS 1   // 设 0 可一键回退到"一图一纹理"
 
-enum { TF_ATLAS_PAGE_SIZE = MAX_TEXTURE_SIZE, TF_ATLAS_MAX_PAGES = 16, TF_ATLAS_GUTTER = 1 };
+enum { TF_ATLAS_PAGE_MAX = MAX_TEXTURE_SIZE, TF_ATLAS_MAX_PAGES = 16, TF_ATLAS_GUTTER = 1 };
+
+// 【诊断】图集页的实际边长在运行时决定：取 min(1024, 设备最大纹理边长) 并向下取 2 的幂。
+// 原因：直接按 1024 申请，在小上限设备上会创建失败（或锁不住），
+// 而失败会走 CheckDXError → DisplayError → exit，直接把进程干掉。
+static int gTfAtlasPageSize = 0;
+
+// 【诊断】图集日志：只在真正用图集时才会写，用于定位"开图集就异常"的问题。
+static void TFAtlasLog(const char* theMsg)
+{
+	FILE* aFile = fopen("thirtyflags_atlas.log", "a");
+	if (aFile != NULL)
+	{
+		fprintf(aFile, "%s\n", theMsg);
+		fclose(aFile);
+	}
+}
 
 struct TfAtlasPage
 {
@@ -58,12 +74,12 @@ static int          gTfAtlasPageCount = 0;
 
 // 货架装箱的核心：把 w×h（已含间隙）放进这一页当前的货架，放得下就更新游标。
 // 拆成纯函数是为了能脱离 D3D 独立测试（见 tools/atlas_pack_test.cpp 的验证脚本）。
-static bool TfAtlasTryPlace(TfAtlasPage& thePage, int theW, int theH, int& theOutX, int& theOutY)
+static bool TfAtlasTryPlace(TfAtlasPage& thePage, int thePageSize, int theW, int theH, int& theOutX, int& theOutY)
 {
-	if (theW > TF_ATLAS_PAGE_SIZE || theH > TF_ATLAS_PAGE_SIZE)
+	if (theW > thePageSize || theH > thePageSize)
 		return false;                                  // 单块就超过一页，放不下
 
-	if (thePage.mX + theW > TF_ATLAS_PAGE_SIZE)
+	if (thePage.mX + theW > thePageSize)
 	{
 		// 当前货架放不下 → 换一行
 		thePage.mY += thePage.mRowH;
@@ -71,7 +87,7 @@ static bool TfAtlasTryPlace(TfAtlasPage& thePage, int theW, int theH, int& theOu
 		thePage.mRowH = 0;
 	}
 
-	if (thePage.mY + theH > TF_ATLAS_PAGE_SIZE)
+	if (thePage.mY + theH > thePageSize)
 		return false;                                  // 这一页也满了
 
 	theOutX = thePage.mX;
@@ -92,7 +108,31 @@ static void FlushSpriteBatch(LPDIRECT3DDEVICE7 theDevice);
 // 合批关闭时两者相等（一个精灵一次调用）；开启时调用数远小于四边形数。
 static unsigned int gSpriteQuadsThisFrame = 0;
 static unsigned int gSpriteCallsThisFrame = 0;
-static unsigned int gSpriteClippedQuadsThisFrame = 0;   // 【性能】走 CPU 剪剪路径的四边形形数
+static unsigned int gSpriteClippedQuadsThisFrame = 0;
+
+// 【诊断】本帧出现过的不同纹理数（上限 64）
+// ——它就是「理论上最少能达到的批次数」。
+static LPDIRECTDRAWSURFACE7 gSpriteTexSeen[64];
+static int gSpriteTexSeenCount = 0;
+
+static void TfNoteSpriteTexture(LPDIRECTDRAWSURFACE7 theTex)
+{
+	for (int i = 0; i < gSpriteTexSeenCount; i++)
+	{
+		if (gSpriteTexSeen[i] == theTex)
+			return;
+	}
+	if (gSpriteTexSeenCount < 64)
+		gSpriteTexSeen[gSpriteTexSeenCount++] = theTex;
+}
+
+unsigned int D3DInterfaceGetDistinctTextureCount()
+{
+	unsigned int aN = (unsigned int)gSpriteTexSeenCount;
+	gSpriteTexSeenCount = 0;
+	return aN;
+}
+   // 【性能】走 CPU 剪剪路径的四边形形数
 
 unsigned int D3DInterfaceGetClippedQuadCount()
 {
@@ -537,22 +577,52 @@ static LPDIRECTDRAWSURFACE7 CreateTextureSurface(LPDIRECT3DDEVICE7 theDevice, LP
 #if TF_TEXTURE_ATLAS
 // 【性能】从共享图集里分配一块 w×h（含 gutter）。成功返回页号并输出页内左上角坐标；
 // 失败返回 -1（调用方回退到"一 piece 一纹理"）。
+// 【诊断】首次调用时确定页边长：取设备上限与 1024 的较小值，向下取 2 的幂。
+static void TfAtlasEnsurePageSize()
+{
+	if (gTfAtlasPageSize != 0)
+		return;
+
+	int aSize = TF_ATLAS_PAGE_MAX;
+	if (gMaxTextureWidth > 0 && gMaxTextureWidth < aSize)
+		aSize = gMaxTextureWidth;
+	if (gMaxTextureHeight > 0 && gMaxTextureHeight < aSize)
+		aSize = gMaxTextureHeight;
+
+	int aPow2 = 1;
+	while (aPow2 * 2 <= aSize)
+		aPow2 *= 2;
+	gTfAtlasPageSize = aPow2;
+
+	char aBuf[192];
+	sprintf(aBuf, "[TFAtlas] device max tex = %dx%d, formats=0x%x -> page size = %d",
+		gMaxTextureWidth, gMaxTextureHeight, (unsigned int)gSupportedPixelFormats, gTfAtlasPageSize);
+	TFAtlasLog(aBuf);
+
+	if (gTfAtlasPageSize < 256)
+		gTfAtlasPageSize = 0;            // 太小就别用图集（保持 0 表示禁用）
+}
+
 static int TfAtlasAlloc(LPDIRECT3DDEVICE7 theDevice, LPDIRECTDRAW7 theDraw, int theFormat,
 	int theWidth, int theHeight, int& theOutX, int& theOutY)
 {
 	if (theFormat == (int)PixelFormat_Palette8)
 		return -1;                       // 调色板纹理不参与图集（一页只有一种格式）
 
+	TfAtlasEnsurePageSize();
+	if (gTfAtlasPageSize == 0)
+		return -1;                       // 设备上限太小，禁用图集
+
 	int aW = theWidth + TF_ATLAS_GUTTER;
 	int aH = theHeight + TF_ATLAS_GUTTER;
-	if (aW > TF_ATLAS_PAGE_SIZE || aH > TF_ATLAS_PAGE_SIZE)
+	if (aW > gTfAtlasPageSize || aH > gTfAtlasPageSize)
 		return -1;                       // 单块超过一页
 
 	for (int i = 0; i < gTfAtlasPageCount; i++)
 	{
 		if (gTfAtlasPages[i].mFormat != theFormat)
 			continue;
-		if (TfAtlasTryPlace(gTfAtlasPages[i], aW, aH, theOutX, theOutY))
+		if (TfAtlasTryPlace(gTfAtlasPages[i], gTfAtlasPageSize, aW, aH, theOutX, theOutY))
 			return i;
 	}
 
@@ -560,16 +630,24 @@ static int TfAtlasAlloc(LPDIRECT3DDEVICE7 theDevice, LPDIRECTDRAW7 theDraw, int 
 		return -1;
 
 	TfAtlasPage& aPage = gTfAtlasPages[gTfAtlasPageCount];
-	aPage.mSurface = CreateTextureSurface(theDevice, theDraw, TF_ATLAS_PAGE_SIZE, TF_ATLAS_PAGE_SIZE, (PixelFormat)theFormat);
+	aPage.mSurface = CreateTextureSurface(theDevice, theDraw, gTfAtlasPageSize, gTfAtlasPageSize, (PixelFormat)theFormat);
 	if (aPage.mSurface == NULL)
+	{
+		TFAtlasLog("[TFAtlas] create page FAILED");
 		return -1;
+	}
+	{
+		char aBuf[128];
+		sprintf(aBuf, "[TFAtlas] page %d created: %d x %d fmt=%d", gTfAtlasPageCount, gTfAtlasPageSize, gTfAtlasPageSize, theFormat);
+		TFAtlasLog(aBuf);
+	}
 	aPage.mFormat = theFormat;
 	aPage.mX = 0;
 	aPage.mY = 0;
 	aPage.mRowH = 0;
 
 	int aIndex = gTfAtlasPageCount++;
-	if (!TfAtlasTryPlace(gTfAtlasPages[aIndex], aW, aH, theOutX, theOutY))
+	if (!TfAtlasTryPlace(gTfAtlasPages[aIndex], gTfAtlasPageSize, aW, aH, theOutX, theOutY))
 		return -1;                       // 刚建的页，理论上不会发生
 	return aIndex;
 }
@@ -1322,10 +1400,10 @@ LPDIRECTDRAWSURFACE7 TextureData::GetTexture(int x, int y, int &width, int &heig
 	if (aPiece.mAtlasPage >= 0)
 	{
 		// 【性能】图集：UV 以整页为分母，并加上本 piece 在页内的偏移
-		u1 = (float)(aPiece.mAtlasX + left) / TF_ATLAS_PAGE_SIZE;
-		v1 = (float)(aPiece.mAtlasY + top) / TF_ATLAS_PAGE_SIZE;
-		u2 = (float)(aPiece.mAtlasX + right) / TF_ATLAS_PAGE_SIZE;
-		v2 = (float)(aPiece.mAtlasY + bottom) / TF_ATLAS_PAGE_SIZE;
+		u1 = (float)(aPiece.mAtlasX + left) / gTfAtlasPageSize;
+		v1 = (float)(aPiece.mAtlasY + top) / gTfAtlasPageSize;
+		u2 = (float)(aPiece.mAtlasX + right) / gTfAtlasPageSize;
+		v2 = (float)(aPiece.mAtlasY + bottom) / gTfAtlasPageSize;
 		return aPiece.mTexture;
 	}
 
@@ -1363,10 +1441,10 @@ LPDIRECTDRAWSURFACE7 TextureData::GetTextureF(float x, float y, float &width, fl
 	if (aPiece.mAtlasPage >= 0)
 	{
 		// 【性能】图集：UV 以整页为分母，并加上本 piece 在页内的偏移
-		u1 = (float)(aPiece.mAtlasX + left) / TF_ATLAS_PAGE_SIZE;
-		v1 = (float)(aPiece.mAtlasY + top) / TF_ATLAS_PAGE_SIZE;
-		u2 = (float)(aPiece.mAtlasX + right) / TF_ATLAS_PAGE_SIZE;
-		v2 = (float)(aPiece.mAtlasY + bottom) / TF_ATLAS_PAGE_SIZE;
+		u1 = (float)(aPiece.mAtlasX + left) / gTfAtlasPageSize;
+		v1 = (float)(aPiece.mAtlasY + top) / gTfAtlasPageSize;
+		u2 = (float)(aPiece.mAtlasX + right) / gTfAtlasPageSize;
+		v2 = (float)(aPiece.mAtlasY + bottom) / gTfAtlasPageSize;
 		return aPiece.mTexture;
 	}
 
@@ -1492,6 +1570,7 @@ void TextureData::Blt(LPDIRECT3DDEVICE7 theDevice, float theX, float theY, const
 			// 【性能】同纹理 + 同混合模式 → 追加进当前批次；否则先 flush 再开新批。
 			// 顶点改写为三角列表（每四边形 6 个顶点，两个三角形共用 v2 对角线），
 			// 位置/颜色/UV 与原 4 顶点三角带完全等价。
+			TfNoteSpriteTexture(aTexture);
 			if (aTexture != gSpriteBatchTex || gSpriteBatchModeKey != gCurSpriteBatchModeKey)
 				FlushSpriteBatch(theDevice);
 
@@ -1816,6 +1895,7 @@ void TextureData::BltTransformed(LPDIRECT3DDEVICE7 theDevice, const SexyMatrix3 
 			if (!clipped)
 			{
 #if TF_SPRITE_BATCH
+				TfNoteSpriteTexture(aTexture);
 				if (aTexture != gSpriteBatchTex || gSpriteBatchModeKey != gCurSpriteBatchModeKey)
 					FlushSpriteBatch(theDevice);
 				if (gSpriteBatchCount + 6 > TF_SPRITE_BATCH_MAX_QUADS * 6)
