@@ -7,7 +7,7 @@
     * 静默：最小化创建 + 不激活显示 + PostMessage 输入（不抢焦点、不动鼠标）
   用法：powershell -File tools/tf_measure.ps1 -Tag xxx [-FillSeconds 30] [-NoFill]
 #>
-param([string]$Tag = "measure", [int]$FillSeconds = 30, [switch]$NoFill, [int]$Flags = 0)
+param([string]$Tag = "measure", [int]$FillSeconds = 30, [switch]$NoFill)
 $ErrorActionPreference = "Continue"
 $rel  = "D:/dsh-project/LawnProject/Release"
 $out  = "D:/dsh-project/LawnProject/docs/perf"
@@ -108,12 +108,16 @@ for ($try = 1; $try -le 5; $try++) {
   [TFM]::Key($h, [char]0x53)        # S -> 开局
   Start-Sleep -Seconds 8
 
-  # 若弹窗抢了焦点，补按 1 / S；再点一次「继续游戏?」弹窗的按钮（该弹窗不处理键盘）
+  # 若弹窗抢了焦点，补按 1 / S 试图走掉
   [TFM]::Key($h, [char]0x31); Start-Sleep -Milliseconds 800
+<<<<<<< HEAD
   [TFM]::Key($h, [char]0x53); Start-Sleep -Seconds 3
   # 「继续游戏?」弹窗：点【新游戏】（客户端坐标 ≈ 557,480）确保进新局
   [TFM]::Click($h, 557, 480); Start-Sleep -Seconds 4
   [TFM]::Click($h, 395, 480); Start-Sleep -Seconds 3
+=======
+  [TFM]::Key($h, [char]0x53); Start-Sleep -Seconds 6
+>>>>>>> parent of 9baa09d (表现层特效层：加色四边形池 + 按类型分组绘制（§12 结论的正解）)
 
   for ($w = 0; $w -lt 8; $w++) {
     if ((GetTfCount) -gt 0) { $entered = $true; break }
@@ -124,14 +128,6 @@ for ($try = 1; $try -le 5; $try++) {
 }
 
 if (-not $entered) { L "FAILED to enter game"; if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }; exit 1 }
-
-# 先推 N 面旗：解锁更多行 → 场上才有足够植物开火 → 才能观察到命中/击杀类特效
-for ($f = 1; $f -le $Flags; $f++) {
-  [TFM]::Key($h, [char]0x2E); Start-Sleep -Seconds 4      # . 推一旗
-  [TFM]::Key($h, [char]0x31); Start-Sleep -Seconds 2      # 1 选强化
-  [TFM]::Key($h, [char]0x53); Start-Sleep -Seconds 7      # S 重选卡开局
-  L "flag $f pushed"
-}
 
 if (-not $NoFill) {
   foreach ($k in 1..3) { [TFM]::Key($h, [char]0x71); Start-Sleep -Milliseconds 800 }   # q 铺满

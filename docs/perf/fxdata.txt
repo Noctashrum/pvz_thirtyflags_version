@@ -1,0 +1,24 @@
+measure tag=fxdata fill=55 nofill=False
+[15:34:41] launching
+[15:34:42] pid=19632
+[15:34:44] hwnd=17632754
+[15:35:21] loaded=True
+[15:35:54] try1 entered=True tfLines=6
+[15:36:07] flag 1 pushed
+[15:36:20] flag 2 pushed
+[15:36:22] filled
+[15:37:17] shot: shot 800x600
+[15:37:17] ---- TFPerf (last 12) ----
+[1791358629] [TFPerf] SLOW frame=44.6ms update=0.0 draw=44.6 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358634] [TFPerf] 500 frames avg=10.0/0.1/6.4/4.4 max=73.6/1.7/60.1 ms (frame/update/draw/idle, 100 fps) | z=51 pl=2 pr=4 reanim=74 emit=0 part=0 | sprite=356/258 clip=0 3d=1
+[1791358634] [TFPerf] SLOW frame=45.5ms update=0.0 draw=45.5 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358634] [TFPerf] SLOW frame=41.8ms update=0.0 draw=41.8 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358634] [TFPerf] SLOW frame=50.2ms update=0.0 draw=50.2 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358634] [TFPerf] SLOW frame=43.2ms update=0.0 draw=43.1 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358634] [TFPerf] SLOW frame=54.6ms update=0.0 draw=54.6 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358634] [TFPerf] SLOW frame=44.2ms update=0.0 draw=44.1 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358635] [TFPerf] SLOW frame=42.4ms update=0.0 draw=42.3 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358635] [TFPerf] SLOW frame=41.3ms update=0.0 draw=41.3 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358637] [TFPerf] SLOW frame=47.2ms update=0.3 draw=46.9 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[1791358637] [TFPerf] SLOW frame=50.5ms update=0.0 draw=50.5 | z=51 pl=2 pr=4 reanim=74 emit=0 part=0
+[15:37:17] total tf lines=40 done
