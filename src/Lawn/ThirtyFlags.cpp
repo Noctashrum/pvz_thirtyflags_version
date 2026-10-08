@@ -1130,15 +1130,25 @@ static void TfFxSpawn(int theKind, float theX, float theY, float theSize, float 
 static void ThirtyFlagsFxUpdate()
 {
     gTfFxFillUsed = 0;   // 【性能】每帧重置填充计数
-#if !defined(TF_PLAYER_BUILD)
-	// 【自测】调试版每隔一段时间主动生成一组样片，
-	// 用来验证“特效层”本身（贴图/加色/合批）是否正常，与战斗无关。
+#if !defined(TF_PLAYER_BUILD) && TF_FX_ENABLE
+	// 【自测·可视场景】调试版：每 40 帧在草坪**固定位置**生成一组**四种特效各一**，
+	// 与战斗状态完全解耦 —— 一次运行 + 一张截图即可完成"观感 + draw 峰值"复核。
+	// 四个位置轮转，避免互相叠加导致看不出各自形状。
 	static int aFxSelfTest = 0;
-	if (++aFxSelfTest % 90 == 0)
+	if (++aFxSelfTest % 40 == 0)
 	{
-		TfFxSpawn(TF_FX_GLOW, 300.0f + (float)(aFxSelfTest % 200), 300.0f + (float)((aFxSelfTest / 90) % 3) * 70.0f,
-			40.0f, 2.5f, 20, 150, 255, 220, 120);
-		TfFxSpawn(TF_FX_FLASH, 420.0f, 260.0f, 26.0f, 0.0f, 15, 90, 180, 220, 255);
+		int aSlot = (aFxSelfTest / 40) % 4;
+		float aX = 200.0f + (float)aSlot * 120.0f;
+		float aY = 200.0f + (float)(aSlot % 3) * 80.0f;
+
+		// 1) 命中光晕（暖白，中等尺寸，缓慢扩张）
+		TfFxSpawn(TF_FX_GLOW, aX, aY, 40.0f, 1.4f, 24, 150, 255, 220, 140);
+		// 2) 精英威压（冷紫，较大，快速扩张）
+		TfFxSpawn(TF_FX_GLOW, aX + 46.0f, aY + 18.0f, 48.0f, 2.6f, 22, 120, 190, 120, 255);
+		// 3) 冲击波闪白（实心四边形，短促）
+		TfFxSpawn(TF_FX_FLASH, aX + 92.0f, aY, 24.0f, 0.0f, 16, 90, 180, 230, 255);
+		// 4) 元素拖尾（毒绿，逐渐收缩）
+		TfFxSpawn(TF_FX_TRAIL, aX + 132.0f, aY + 26.0f, 18.0f, -0.3f, 12, 130, 40, 220, 40);
 	}
 #endif
     for (int i = 0; i < gTfFxCount; i++)
@@ -2152,6 +2162,8 @@ void D3DInterfaceGetSpriteStats(unsigned int* theQuads, unsigned int* theCalls);
 static unsigned int gTFPerfSpriteQuads = 0;   // 【性能】本帧精灵四边形数
 static unsigned int gTFPerfSpriteCalls = 0;   // 【性能】本帧实际绘制调用次数
 static unsigned int gTFPerfSpriteClipped = 0;  // 【性能】其中走 CPU 剪剪的四边形数
+static unsigned int gTFPerfFx = 0;            // 【诊断】特效数量
+static unsigned int gTFPerfFill = 0;          // 【诊断】本帧已用填充
 
 static double TFPerfMs(LARGE_INTEGER theFrom, LARGE_INTEGER theTo)
 {
