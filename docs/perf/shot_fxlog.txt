@@ -3,3 +3,7 @@ shot tag=fxlog 15:37:23
 [15:37:27] pid=25312
 [15:42:40] hwnd=262970
 [15:43:25] waited load
+[15:43:47] shot1: NORECT
+[15:44:12] shot2: NORECT
+[15:44:12] alive=False
+[15:44:12] done
