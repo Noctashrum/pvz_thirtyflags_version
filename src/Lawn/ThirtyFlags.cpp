@@ -1071,6 +1071,10 @@ struct TfFxQuad
 static TfFxQuad gTfFx[TF_FX_MAX];
 static int      gTfFxCount = 0;
 
+// 【诊断】供" 日志可证" 用：特效数量与本帧已用填充面积
+int ThirtyFlagsFxCount() { return gTfFxCount; }
+int ThirtyFlagsFxFillUsed() { return gTfFxFillUsed; }
+
 // 元素配色：与火炬树桩转换火球时的加色染色保持一致，玩家一眼能对上
 static void TfFxGetElementColor(int theElement, int& theR, int& theG, int& theB)
 {
@@ -2158,12 +2162,14 @@ static double        gTFPerfMaxFrame = 0.0;
 // 【性能】框架渲染器提供的精灵统计（D3DInterface.cpp）。
 // 这里只做声明，不引 D3DInterface.h —— 那头文件会拖进 d3d8 的头，与 Lawn 侧冲突。
 void D3DInterfaceGetSpriteStats(unsigned int* theQuads, unsigned int* theCalls);
+int ThirtyFlagsFxCount();
+int ThirtyFlagsFxFillUsed();
 
 static unsigned int gTFPerfSpriteQuads = 0;   // 【性能】本帧精灵四边形数
+static unsigned int gTFPerfFx = 0;    // fx
+static unsigned int gTFPerfFill = 0;  // fill
 static unsigned int gTFPerfSpriteCalls = 0;   // 【性能】本帧实际绘制调用次数
 static unsigned int gTFPerfSpriteClipped = 0;  // 【性能】其中走 CPU 剪剪的四边形数
-static unsigned int gTFPerfFx = 0;            // 【诊断】特效数量
-static unsigned int gTFPerfFill = 0;          // 【诊断】本帧已用填充
 
 static double TFPerfMs(LARGE_INTEGER theFrom, LARGE_INTEGER theTo)
 {
@@ -2242,6 +2248,8 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
 
     // 【性能】取本帧精灵绘制统计（读取即清零）：四边形数 / 实际绘制调用次数
     D3DInterfaceGetSpriteStats(&gTFPerfSpriteQuads, &gTFPerfSpriteCalls);
+    gTFPerfFx = (unsigned int)ThirtyFlagsFxCount();
+    gTFPerfFill = (unsigned int)ThirtyFlagsFxFillUsed();
 
     // 单帧掉帧：立刻记一行（含当时的实体规模），最多 40 条
     double aFrameMs = (gTFPerfPrevUpdateBeginTick.QuadPart != 0)
@@ -2264,7 +2272,7 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
     {
         char aBuf[320];
         sprintf(aBuf,
-            "[TFPerf] %d frames avg=%.1f/%.1f/%.1f/%.1f max=%.1f/%.1f/%.1f ms (frame/update/draw/idle, %.0f fps) | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u | sprite=%u/%u clip=%u 3d=%d",
+            "[TFPerf] %d frames avg=%.1f/%.1f/%.1f/%.1f max=%.1f/%.1f/%.1f ms (frame/update/draw/idle, %.0f fps) | z=%u pl=%u pr=%u reanim=%u emit=%u part=%u | sprite=%u/%u clip=%u fx=%u/%u 3d=%d",
             gTFPerfFrames,
             gTFPerfSumFrame / (double)gTFPerfFrames, gTFPerfSumUpdate / (double)gTFPerfFrames,
             gTFPerfSumDraw / (double)gTFPerfFrames, gTFPerfSumIdle / (double)gTFPerfFrames,
@@ -2276,6 +2284,7 @@ void ThirtyFlagsPerfDrawEnd(Board* theBoard)
             theBoard->mApp->mEffectSystem->mParticleHolder->mParticles.mSize,
             gTFPerfSpriteQuads, gTFPerfSpriteCalls,
             gTFPerfSpriteClipped,
+            gTFPerfFx, gTFPerfFill,
             theBoard->mApp->Is3DAccelerated() ? 1 : 0);
         TFLog(aBuf);
 
