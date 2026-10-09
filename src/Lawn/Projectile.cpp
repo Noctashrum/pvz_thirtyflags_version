@@ -1324,45 +1324,53 @@ void Projectile::ConvertToFireball(int theGridX)
 	if (mHitTorchwoodGridX == theGridX)
 		return;
 
-	// 【性能·实测反馈】同格多个树桩（叠种火炬）会多次调用本函数，把伤害/元素逐层叠上去；
-	// 但**火焰表现只需要一份** —— 原本每次调用都新建一条 REANIM_FIRE_PEA 骨骼动画，
-	// 于是同一颗豌豆在 3 层叠种格里会养 3 条骨骼动画（再乘上多格火炬、机枪 4 发/轮，
-	// 就是「越打越卡」「物品创建暴涨」的来源之一）。
-	// 这里：状态照旧更新（伤害/元素叠加完全不变），只是在「已经是火球」时跳过重复的表现创建。
+	// 【性能】同格多个树桩（叠种火炬）会反复调用本函数，把伤害/元素逐层叠上去；
+	// 但**火焰表现只需要一条** —— 原版每次调用都新建一条 REANIM_FIRE_PEA，
+	// 后期"上百火球 × 多层叠种"会养出成倍的骨骼动画（就是越打越卡的元凶之一）。
+	// 所以：状态照旧叠加，**表现只在第一次创建**。
 	bool aAlreadyFire = (mProjectileType == ProjectileType::PROJECTILE_FIREBALL);
 
 	mProjectileType = ProjectileType::PROJECTILE_FIREBALL;
 	mHitTorchwoodGridX = theGridX;
 	mApp->PlayFoley(FoleyType::FOLEY_FIREPEA);
 
-	if (aAlreadyFire)
-		return;
-
-	float aOffsetX = -25.0f;
-	float aOffsetY = -25.0f;
-	Reanimation* aFirePeaReanim = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_FIRE_PEA);
-	if (mMotionType == ProjectileMotion::MOTION_BACKWARDS)
+	if (!aAlreadyFire)
 	{
-		aFirePeaReanim->OverrideScale(-1.0f, 1.0f);
-		aOffsetX += 80.0f;
+		float aOffsetX = -25.0f;
+		float aOffsetY = -25.0f;
+		Reanimation* aNewReanim = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_FIRE_PEA);
+		if (aNewReanim != NULL)
+		{
+			if (mMotionType == ProjectileMotion::MOTION_BACKWARDS)
+			{
+				aNewReanim->OverrideScale(-1.0f, 1.0f);
+				aOffsetX += 80.0f;
+			}
+
+			aNewReanim->SetPosition(mPosX + aOffsetX, mPosY + aOffsetY);
+			aNewReanim->mLoopType = ReanimLoopType::REANIM_LOOP;
+			aNewReanim->mAnimRate = RandRangeFloat(50.0f, 80.0f);
+			AttachReanim(mAttachmentID, aNewReanim, aOffsetX, aOffsetY);
+		}
 	}
 
-	aFirePeaReanim->SetPosition(mPosX + aOffsetX, mPosY + aOffsetY);
-	aFirePeaReanim->mLoopType = ReanimLoopType::REANIM_LOOP;
-
-	// 【三十旗】元素火球染色：用加色叠加让火焰带上元素色（蓝/绿/粉/金），一眼区分
+	// 【三十旗】元素火球染色：用加色叠加让火焰带上元素色（蓝/绿/粉/金），一眼区分。
+	// 这一句**必须在去重之外**：无论表现是新建的还是早就挂着的，都要按当前元素刷新，
+	// 否则"先成为普通火球、之后才带元素"的路径就永远染不上色（曾出现过的回归）。
 	if (mElement != 0)
 	{
-		aFirePeaReanim->mEnableExtraAdditiveDraw = true;
-		if (mElement == TF_ELEM_ICE)            aFirePeaReanim->mExtraAdditiveColor = Sexy::Color(40, 90, 255);
-		else if (mElement == TF_ELEM_DEEPFREEZE) aFirePeaReanim->mExtraAdditiveColor = Sexy::Color(0, 40, 220);
-		else if (mElement == TF_ELEM_POISON)     aFirePeaReanim->mExtraAdditiveColor = Sexy::Color(40, 220, 40);
-		else if (mElement == TF_ELEM_CHARM)      aFirePeaReanim->mExtraAdditiveColor = Sexy::Color(255, 60, 180);
-		else if (mElement == TF_ELEM_BUTTER)     aFirePeaReanim->mExtraAdditiveColor = Sexy::Color(255, 210, 30);
-		else if (mElement == TF_ELEM_GIANT)      aFirePeaReanim->mExtraAdditiveColor = Sexy::Color(255, 120, 0);
+		Reanimation* aFireReanim = FindReanimAttachment(mAttachmentID);
+		if (aFireReanim != NULL)
+		{
+			aFireReanim->mEnableExtraAdditiveDraw = true;
+			if (mElement == TF_ELEM_ICE)            aFireReanim->mExtraAdditiveColor = Sexy::Color(40, 90, 255);
+			else if (mElement == TF_ELEM_DEEPFREEZE) aFireReanim->mExtraAdditiveColor = Sexy::Color(0, 40, 220);
+			else if (mElement == TF_ELEM_POISON)     aFireReanim->mExtraAdditiveColor = Sexy::Color(40, 220, 40);
+			else if (mElement == TF_ELEM_CHARM)      aFireReanim->mExtraAdditiveColor = Sexy::Color(255, 60, 180);
+			else if (mElement == TF_ELEM_BUTTER)     aFireReanim->mExtraAdditiveColor = Sexy::Color(255, 210, 30);
+			else if (mElement == TF_ELEM_GIANT)      aFireReanim->mExtraAdditiveColor = Sexy::Color(255, 120, 0);
+		}
 	}
-	aFirePeaReanim->mAnimRate = RandRangeFloat(50.0f, 80.0f);
-	AttachReanim(mAttachmentID, aFirePeaReanim, aOffsetX, aOffsetY);
 }
 
 //0x46EE00
